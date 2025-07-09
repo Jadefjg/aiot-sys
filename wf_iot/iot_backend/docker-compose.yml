@@ -1,0 +1,141 @@
+version: '3.8'
+
+services:
+  mysql_db:
+  image: mysql:8.0
+  container_name: iot_mysql_db
+  environment:
+    MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    MYSQL_DATABASE: ${MYSQL_DATABASE}
+    MYSQL_USER: ${MYSQL_USER}
+    MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+  volumes:
+    - mysql_data:/var/lib/mysql
+  ports:
+    - "3306:3306"
+  healthcheck:
+    test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u$`{MYSQL_USER}", "-p`${MYSQL_PASSWORD}"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+
+  redis_cache:
+    image: redis:latest
+    container_name: iot_redis_cache
+    ports:
+      - "6379:6379"
+
+  mqtt_broker:
+    image: emqx/emqx:latest # 或者 mosquitto:latest
+    container_name: iot_mqtt_broker
+    ports:
+      - "1883:1883" # MQTT TCP
+      - "8083:8083" # MQTT WebSocket (EMQX)
+      - "8080:8080" # EMQX Dashboard (如果使用EMQX)
+    environment:
+    EMQX_AUTH__MQTT__ACL__FILE: "/opt/emqx/etc/acl.conf" # 示例ACL配置
+    volumes:
+      - ./emqx_data:/opt/emqx/data
+      - ./emqx_etc:/opt/emqx/etc
+
+  backend_app:
+    build: ./iot_backend
+    container_name: iot_backend_app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - ./iot_backend:/app
+      - ./firmware_storage:/app/firmware_storage # 挂载固件存储目录
+    ports:
+      - "8000:8000"
+    environment:
+      MYSQL_HOST: mysql_db
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      REDIS_HOST: redis_cache
+      REDIS_PORT: 6379
+      MQTT_BROKER_HOST: mqtt_broker
+      MQTT_BROKER_PORT: 1883
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+      CELERY_BROKER_URL: redis://redis_cache:6379/0
+      CELERY_RESULT_BACKEND: redis://redis_cache:6379/0
+      FIRMWARE_UPLOAD_DIR: /app/firmware_storage
+      FIRMWARE_BASE_URL: http://your_domain.com/firmware_files # Nginx提供的下载URL
+  depends_on:
+    mysql_db:
+      condition: service_healthy
+    redis_cache:
+      condition: service_started
+    mqtt_broker:
+      condition: service_started
+
+  celery_worker:
+    build: ./iot_backend
+    container_name: iot_celery_worker
+    command: celery -A app.tasks.firmware_tasks.celery_app worker --loglevel=info
+    volumes:
+      - ./iot_backend:/app
+      - ./firmware_storage:/app/firmware_storage
+  environment:
+    MYSQL_HOST: mysql_db
+    MYSQL_PORT: 3306
+    MYSQL_USER: ${MYSQL_USER}
+    MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    MYSQL_DATABASE: ${MYSQL_DATABASE}
+    REDIS_HOST: redis_cache
+    REDIS_PORT: 6379
+    MQTT_BROKER_HOST: mqtt_broker
+    MQTT_BROKER_PORT: 1883
+    MQTT_USERNAME: ${MQTT_USERNAME}
+    MQTT_PASSWORD: ${MQTT_PASSWORD}
+    SECRET_KEY: ${SECRET_KEY}
+    ALGORITHM: HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    CELERY_BROKER_URL: redis://redis_cache:6379/0
+    CELERY_RESULT_BACKEND: redis://redis_cache:6379/0
+    FIRMWARE_UPLOAD_DIR: /app/firmware_storage
+    FIRMWARE_BASE_URL: http://your_domain.com/firmware_files
+  depends_on:
+    mysql_db:
+      condition: service_healthy
+    redis_cache:
+      condition: service_started
+    mqtt_broker:
+      condition: service_started
+
+frontend_app:
+  build: ./iot_frontend
+  container_name: iot_frontend_app
+  command: npm run serve # 或 npm run build && serve -s dist
+  volumes:
+    - ./iot_frontend:/app
+  ports:
+    - "8080:8080" # Vue开发服务器端口
+  depends_on:
+    - backend_app
+
+nginx:
+  image: nginx:latest
+  container_name: iot_nginx
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    - ./nginx/conf.d:/etc/nginx/conf.d
+    - ./nginx/ssl:/etc/nginx/ssl
+    - ./iot_frontend/dist:/usr/share/nginx/html/iot_frontend/dist # 挂载前端打包后的文件
+    - ./firmware_storage:/path/to/your/firmware_storage # 挂载固件存储目录
+  depends_on:
+    - backend_app
+    - frontend_app
+
+volumes:
+  mysql_data:
+  emqx_data:
+  emqx_etc:
