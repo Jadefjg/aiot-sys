@@ -16,8 +16,24 @@ class CRUDUser:
 
     def get_by_email(self, db: Session, email: str) -> Optional[User]:
         return db.query(User).filter(User.email == email).first()
+    
+    def get_user_by_username(self, db: Session, username: str) -> Optional[User]:
+        return db.query(User).filter(User.username == username).first()
+    
+    def get_user(self, db: Session, user_id: int) -> Optional[User]:
+        return db.query(User).filter(User.id == user_id).first()
+    
+    def create_user(self, db: Session, obj_in: UserCreate) -> User:
+        return self.create(db, obj_in)
+    
+    def update_user(self, db: Session, obj_in: UserUpdate) -> User:
+        # 这个方法需要当前用户对象，这里简化处理
+        user = db.query(User).filter(User.username == obj_in.username).first()
+        if user:
+            return self.update(db, db_obj=user, obj_in=obj_in)
+        return None
 
-    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) ->List[User]:
+    def get_multi(self, db: Session, skip: int = 0, limit: int = 100, current_user=None) ->List[User]:
         return db.query(User).offset(skip).limit(limit).all()
 
     def create(self, db: Session, obj_in: UserCreate) -> User:

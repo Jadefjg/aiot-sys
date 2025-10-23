@@ -10,9 +10,13 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     password: str
+    full_name: Optional[str] = None
+    is_superuser: Optional[bool] = False
 
 
 class UserUpdate(UserBase):
+    password: Optional[str] = None
+    full_name: Optional[str] = None
     is_active: Optional[bool] = None
 
 
