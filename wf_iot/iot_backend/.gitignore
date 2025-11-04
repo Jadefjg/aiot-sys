@@ -2,4 +2,6 @@
 .venv
 .idea
 
-.cursorrules
+.cursors
+
+.CLAUDE.md

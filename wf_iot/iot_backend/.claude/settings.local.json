@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree -L 3 -I 'venv|.venv|.idea|__pycache__|*.pyc|migrations' app/)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
