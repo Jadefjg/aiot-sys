@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(tree -L 3 -I 'venv|.venv|.idea|__pycache__|*.pyc|migrations' app/)"
+      "Bash(tree -L 3 -I 'venv|.venv|.idea|__pycache__|*.pyc|migrations' app/)",
+      "Bash(.venv/Scripts/pip.exe show:*)",
+      "Bash(.venv/Scripts/pip.exe:*)",
+      "Bash(python run_tests.py:*)"
     ],
     "deny": [],
     "ask": []

@@ -31,8 +31,8 @@ class Role(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系
-    users = relationship("UserRole", back_populates="role", cascade="all,delete - orphan")
-    permissions = relationship("RolePermission", back_populates="role",cascade="all, delete-orphan")
+    users = relationship("UserRole", back_populates="role", cascade="all,delete-orphan")
+    permissions = relationship("RolePermission", back_populates="role",cascade="all,delete-orphan")
 
 
 class Permission(Base):
@@ -45,7 +45,7 @@ class Permission(Base):
     action = Column(String(100), nullable=False)
 
     # 关系
-    roles = relationship("RolePermission", back_populates="permission", cascade="all, delete - orphan")
+    roles = relationship("RolePermission", back_populates="permission", cascade="all,delete-orphan")
 
 
 class UserRole(Base):

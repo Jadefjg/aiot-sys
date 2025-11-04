@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
-from app.api.vi.api import api_router
+from app.api.v1.api import api_router
 from app.core.config import settings
 from app.services.mqtt_service import mqtt_client, mqtt_service
 

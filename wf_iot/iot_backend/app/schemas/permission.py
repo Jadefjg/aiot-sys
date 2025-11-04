@@ -1,0 +1,42 @@
+from pydantic import BaseModel
+from typing import Optional
+from datetime import datetime
+
+
+class PermissionBase(BaseModel):
+    """CP˙@!ã"""
+    name: str  # CPÇ: "device:read", "user:create"
+    description: Optional[str] = None
+    resource: str  # Dê{ãÇ: "device", "user"
+    action: str  # Õ\{ãÇ: "read", "create", "update", "delete"
+
+
+class PermissionCreate(PermissionBase):
+    """˙CP!ã"""
+    pass
+
+
+class PermissionUpdate(BaseModel):
+    """Ù∞CP!ã"""
+    name: Optional[str] = None
+    description: Optional[str] = None
+    resource: Optional[str] = None
+    action: Optional[str] = None
+
+
+class PermissionInDBBase(PermissionBase):
+    """pnìCP˙@!ã"""
+    id: int
+
+    class Config:
+        from_attributes = True
+
+
+class Permission(PermissionInDBBase):
+    """CPÕî!ã"""
+    pass
+
+
+class PermissionInDB(PermissionInDBBase):
+    """pnì-ÑCP!ã"""
+    pass
