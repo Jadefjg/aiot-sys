@@ -6,7 +6,8 @@
       "Bash(.venv/Scripts/pip.exe:*)",
       "Bash(python run_tests.py:*)",
       "Bash(timeout 120 python -m pytest:*)",
-      "Bash(mv:*)"
+      "Bash(mv:*)",
+      "Bash(python:*)"
     ],
     "deny": [],
     "ask": []

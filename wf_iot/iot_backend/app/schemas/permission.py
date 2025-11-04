@@ -4,20 +4,20 @@ from datetime import datetime
 
 
 class PermissionBase(BaseModel):
-    """CP˙@!ã"""
-    name: str  # CPÇ: "device:read", "user:create"
+    """Base permission model"""
+    name: str  # Permission name, e.g: "device:read", "user:create"
     description: Optional[str] = None
-    resource: str  # Dê{ãÇ: "device", "user"
-    action: str  # Õ\{ãÇ: "read", "create", "update", "delete"
+    resource: str  # Resource type, e.g: "device", "user"
+    action: str  # Action type, e.g: "read", "create", "update", "delete"
 
 
 class PermissionCreate(PermissionBase):
-    """˙CP!ã"""
+    """Create permission model"""
     pass
 
 
 class PermissionUpdate(BaseModel):
-    """Ù∞CP!ã"""
+    """Update permission model"""
     name: Optional[str] = None
     description: Optional[str] = None
     resource: Optional[str] = None
@@ -25,7 +25,7 @@ class PermissionUpdate(BaseModel):
 
 
 class PermissionInDBBase(PermissionBase):
-    """pnìCP˙@!ã"""
+    """Database permission base model"""
     id: int
 
     class Config:
@@ -33,10 +33,10 @@ class PermissionInDBBase(PermissionBase):
 
 
 class Permission(PermissionInDBBase):
-    """CPÕî!ã"""
+    """Permission response model"""
     pass
 
 
 class PermissionInDB(PermissionInDBBase):
-    """pnì-ÑCP!ã"""
+    """Permission model in database"""
     pass
