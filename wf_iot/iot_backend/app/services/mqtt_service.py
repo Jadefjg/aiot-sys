@@ -9,7 +9,6 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.crud.device import device_crud, device_command_crud, device_command_crud
 from app.schemas.device import DeviceDataCreate, DeviceUpdate
-from app.services.mqtt_pub import topic
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)

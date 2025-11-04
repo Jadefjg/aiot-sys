@@ -8,7 +8,7 @@ from app.db.session import get_db
 from app.core.config import settings
 from app.crud.device import device_crud
 from app.crud.firmware import firmware_crud # 假设已定义CRUDFirmware
-from app.core.security import get_current_active_user, has_permission
+from app.core.dependencies import get_current_active_user, has_permission
 from app.tasks.firmware_tasks import celery_app, initiate_firmware_upgrade
 from app.schemas.firmware import Firmware, FirmwareCreate, FirmwareUpgradeTask,FirmwareUpgradeTaskCreate
 

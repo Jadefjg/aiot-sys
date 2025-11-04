@@ -18,14 +18,14 @@ class Device(Base):
     hardware_version = Column(String(50), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    metadata = Column(JSON, nullable=True) # 存储设备额外信息，如位置、传感器类型等
+    device_metadata = Column(JSON, nullable=True) # 存储设备额外信息，如位置、传感器类型等
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     # 关系
     owner = relationship("User", back_populates="devices")
-    data_records = relationship("DeviceData", back_populates="device",cascade="all, delete-orphan")
-    upgrade_tasks = relationship("FirmwareUpgradeTask",back_populates="device", cascade="all, delete-orphan")
+    data_records = relationship("DeviceData", back_populates="device",cascade="all,delete-orphan")
+    upgrade_tasks = relationship("FirmwareUpgradeTask",back_populates="device", cascade="all,delete-orphan")
 
 
 class DeviceData(Base):

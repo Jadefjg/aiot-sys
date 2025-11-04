@@ -7,9 +7,9 @@ from sqlalchemy.sql.functions import current_user
 from app.db.session import get_db
 from app.crud.device import device_crud, device_command_crud
 from app.schemas.user import User
-from app.core.security import get_current_active_user
+from app.core.dependencies import get_current_active_user, has_permission
 from app.services.mqtt_service import mqtt_client # 假设已初始化MQTT客户端
-from app.schemas.device import Device, DeviceCreate, DeviceUpdate,DeviceDataCreate, DeviceData, DeviceDateCreate, DeviceCommand, DeviceCommandCreate
+from app.schemas.device import Device, DeviceCreate, DeviceUpdate,DeviceDataCreate, DeviceData, DeviceCommand, DeviceCommandCreate
 
 router = APIRouter()
 
@@ -200,7 +200,7 @@ def send_device_command(
         raise HTTPException(status_code=500, detail=f"Failed to send command:{str(e)}")
     return command
 
-@router.get("/status/online", response_model=[Device])
+@router.get("/status/online", response_model=List[Device])
 def get_online_devices(
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_active_user),

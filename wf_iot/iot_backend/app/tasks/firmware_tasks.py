@@ -12,7 +12,7 @@ from app.services.mqtt_service import mqtt_client
 
 celery_app = Celery(
     'firmware_tasks',
-    broker=settings.CELERY_BROKER,
+    broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
 )
 

@@ -4,7 +4,9 @@
       "Bash(tree -L 3 -I 'venv|.venv|.idea|__pycache__|*.pyc|migrations' app/)",
       "Bash(.venv/Scripts/pip.exe show:*)",
       "Bash(.venv/Scripts/pip.exe:*)",
-      "Bash(python run_tests.py:*)"
+      "Bash(python run_tests.py:*)",
+      "Bash(timeout 120 python -m pytest:*)",
+      "Bash(mv:*)"
     ],
     "deny": [],
     "ask": []

@@ -48,3 +48,26 @@ class DeviceData(BaseModel):
     data: Dict[str, Any]
     class Config:
         from_attributes = True
+
+
+class DeviceCommandCreate(BaseModel):
+    """创建设备命令的请求模型"""
+    device_id: int
+    command_type: str
+    command_data: Dict[str, Any]
+
+
+class DeviceCommand(BaseModel):
+    """设备命令响应模型"""
+    id: int
+    device_id: int
+    command_type: str
+    command_data: Dict[str, Any]
+    status: str
+    sent_at: Optional[datetime] = None
+    acknowledged_at: Optional[datetime] = None
+    response_data: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
