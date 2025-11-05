@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 
 from app.api.v1.api import api_router
 from app.core.config import settings
-from app.services.mqtt_service import mqtt_client, mqtt_service
+from app.services.protocol_manager import protocol_manager
 
 
 @asynccontextmanager
@@ -12,16 +12,29 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     print("Starting IOT Backend Service...")
 
-    # 启动MQTT服务
-    mqtt_service.start()
+    # 初始化协议管理器
+    protocol_manager.initialize()
+
+    # 启动所有协议服务 (MQTT, CoAP, AMQP等)
+    startup_results = await protocol_manager.start_all()
+
+    # 记录启动状态
+    for protocol, success in startup_results.items():
+        status = "✓" if success else "✗"
+        print(f"{status} {protocol.upper()} service: {'Started' if success else 'Failed'}")
 
     yield
 
     # 关闭时执行
     print("Shutting down IOT Backend Service...")
 
-    # 停止MQTT服务
-    mqtt_service.stop()
+    # 停止所有协议服务
+    shutdown_results = await protocol_manager.stop_all()
+
+    # 记录关闭状态
+    for protocol, success in shutdown_results.items():
+        status = "✓" if success else "✗"
+        print(f"{status} {protocol.upper()} service: {'Stopped' if success else 'Failed'}")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -52,10 +65,40 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-        "mqtt_connected": mqtt_client.connected if mqtt_client.connected else False,
+    """
+    健康检查端点
+    监控所有协议服务的连接状态
+    """
+    # 获取所有协议服务状态
+    protocol_statuses = protocol_manager.get_service_status()
+
+    # 计算总体状态
+    all_connected = all(
+        status.get("connected", False)
+        for status in protocol_statuses
+        if status
+    )
+
+    # 构建健康检查响应
+    response = {
+        "status": "healthy" if all_connected else "degraded",
+        "timestamp": "2024-01-01T00:00:00Z",
+        "protocols": {}
     }
+
+    # 添加每个协议的详细信息
+    for status in protocol_statuses:
+        if status:
+            protocol_name = status["protocol"]
+            response["protocols"][protocol_name] = {
+                "connected": status.get("connected", False),
+                "device_count": status.get("device_count", 0)
+            }
+
+    # 添加总体连接状态
+    response["all_protocols_connected"] = all_connected
+
+    return response
 
 if __name__ == "__main__":
     import uvicorn
