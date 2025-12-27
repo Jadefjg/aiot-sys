@@ -1,0 +1,140 @@
+syntax = "proto3";
+
+package mqtt_gateway;
+
+option go_package = "proto/mqtt_gateway";
+
+import "google/protobuf/struct.proto";
+
+// MQTT Gateway Service - MQTT消息收发网关服务
+service MqttGatewayService {
+    // 发布消息到设备
+    rpc PublishMessage(PublishMessageRequest) returns (PublishResponse);
+    // 批量发布消息
+    rpc BatchPublishMessage(BatchPublishRequest) returns (BatchPublishResponse);
+    // 订阅主题（用于服务内部）
+    rpc SubscribeTopic(SubscribeTopicRequest) returns (SubscribeResponse);
+    // 取消订阅
+    rpc UnsubscribeTopic(UnsubscribeTopicRequest) returns (UnsubscribeResponse);
+    // 发送设备命令
+    rpc SendDeviceCommand(SendDeviceCommandRequest) returns (SendCommandResponse);
+    // 发送固件升级命令
+    rpc SendFirmwareUpgrade(SendFirmwareUpgradeRequest) returns (SendUpgradeResponse);
+    // 获取连接状态
+    rpc GetConnectionStatus(GetConnectionStatusRequest) returns (ConnectionStatusResponse);
+    // 获取设备在线状态
+    rpc GetDeviceOnlineStatus(GetDeviceOnlineStatusRequest) returns (DeviceOnlineStatusResponse);
+}
+
+// ==================== 消息发布 ====================
+
+message PublishMessageRequest {
+    string topic = 1;               // MQTT主题
+    bytes payload = 2;              // 消息内容
+    int32 qos = 3;                  // QoS级别 (0, 1, 2)
+    bool retain = 4;                // 是否保留消息
+}
+
+message PublishResponse {
+    bool success = 1;
+    string message_id = 2;
+    string error_message = 3;
+}
+
+message BatchPublishRequest {
+    repeated PublishMessageRequest messages = 1;
+}
+
+message BatchPublishResponse {
+    bool success = 1;
+    int32 published_count = 2;
+    int32 failed_count = 3;
+    repeated string failed_topics = 4;
+    string error_message = 5;
+}
+
+// ==================== 主题订阅 ====================
+
+message SubscribeTopicRequest {
+    string topic = 1;               // 支持通配符 +, #
+    int32 qos = 2;
+}
+
+message SubscribeResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message UnsubscribeTopicRequest {
+    string topic = 1;
+}
+
+message UnsubscribeResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+// ==================== 设备命令 ====================
+
+message SendDeviceCommandRequest {
+    string device_id = 1;           // 设备唯一标识符
+    string command_type = 2;        // control, config, query
+    google.protobuf.Struct command_data = 3;
+    int32 timeout_seconds = 4;      // 命令超时时间
+    int32 qos = 5;
+}
+
+message SendCommandResponse {
+    bool success = 1;
+    string command_id = 2;          // 命令追踪ID
+    string error_message = 3;
+}
+
+// ==================== 固件升级 ====================
+
+message SendFirmwareUpgradeRequest {
+    string device_id = 1;
+    string firmware_version = 2;
+    string firmware_url = 3;
+    string file_hash = 4;           // 固件校验哈希
+    int64 file_size = 5;
+    int32 qos = 6;
+}
+
+message SendUpgradeResponse {
+    bool success = 1;
+    string upgrade_id = 2;          // 升级任务追踪ID
+    string error_message = 3;
+}
+
+// ==================== 状态查询 ====================
+
+message GetConnectionStatusRequest {
+    // 无参数，查询MQTT broker连接状态
+}
+
+message ConnectionStatusResponse {
+    bool connected = 1;
+    string broker_address = 2;
+    string client_id = 3;
+    int64 connected_since = 4;      // Unix timestamp
+    int64 messages_published = 5;
+    int64 messages_received = 6;
+    string error_message = 7;
+}
+
+message GetDeviceOnlineStatusRequest {
+    repeated string device_ids = 1;
+}
+
+message DeviceOnlineStatus {
+    string device_id = 1;
+    bool online = 2;
+    string last_seen = 3;           // ISO 8601格式时间戳
+}
+
+message DeviceOnlineStatusResponse {
+    bool success = 1;
+    repeated DeviceOnlineStatus statuses = 2;
+    string error_message = 3;
+}

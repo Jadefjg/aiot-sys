@@ -133,7 +133,7 @@ class CRUDRole:
     def get_by_name(self, db: Session, name: str) -> Optional[Role]:
         return db.query(Role).filter(Role.name == name).first()
 
-    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) ->List[Role]:
+    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) -> List[Role]:
         return db.query(Role).offset(skip).limit(limit).all()
 
     def create(self, db: Session, obj_in: RoleCreate) -> Role:
@@ -143,6 +143,31 @@ class CRUDRole:
         db.refresh(db_obj)
         return db_obj
 
+    def update(self, db: Session, db_obj: Role, name: Optional[str] = None,
+               description: Optional[str] = None) -> Role:
+        """更新角色信息"""
+        if name is not None:
+            db_obj.name = name
+        if description is not None:
+            db_obj.description = description
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def delete(self, db: Session, id: int) -> Optional[Role]:
+        """删除角色"""
+        obj = db.query(Role).filter(Role.id == id).first()
+        if obj:
+            # 先删除角色权限关联
+            db.query(RolePermission).filter(RolePermission.role_id == id).delete()
+            # 删除用户角色关联
+            db.query(UserRole).filter(UserRole.role_id == id).delete()
+            # 删除角色
+            db.delete(obj)
+            db.commit()
+        return obj
+
     def assign_permission(self, db: Session, role_id: int, permission_id: int) -> RolePermission:
         existing = db.query(RolePermission).filter(
             and_(RolePermission.role_id == role_id,
@@ -150,11 +175,29 @@ class CRUDRole:
         ).first()
         if existing:
             return existing
-        role_permission = RolePermission(role_id=role_id,permission_id=permission_id)
+        role_permission = RolePermission(role_id=role_id, permission_id=permission_id)
         db.add(role_permission)
         db.commit()
         db.refresh(role_permission)
         return role_permission
+
+    def remove_permission(self, db: Session, role_id: int, permission_id: int) -> bool:
+        """移除角色的权限"""
+        role_permission = db.query(RolePermission).filter(
+            and_(RolePermission.role_id == role_id,
+                 RolePermission.permission_id == permission_id)
+        ).first()
+        if role_permission:
+            db.delete(role_permission)
+            db.commit()
+            return True
+        return False
+
+    def get_role_permissions(self, db: Session, role_id: int) -> List[Permission]:
+        """获取角色的所有权限"""
+        return db.query(Permission).join(RolePermission).filter(
+            RolePermission.role_id == role_id
+        ).all()
 
 
 class CRUDPermission:

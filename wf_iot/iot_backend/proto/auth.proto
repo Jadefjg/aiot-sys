@@ -1,0 +1,95 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "proto/auth";
+
+// Auth Service - 用户认证与权限验证服务
+service AuthService {
+    // 验证JWT Token
+    rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+    // 检查用户权限
+    rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+    // 获取用户信息
+    rpc GetUserById(GetUserByIdRequest) returns (UserResponse);
+    // 获取用户权限列表
+    rpc GetUserPermissions(GetUserPermissionsRequest) returns (PermissionListResponse);
+    // 验证用户凭证
+    rpc VerifyCredentials(VerifyCredentialsRequest) returns (VerifyCredentialsResponse);
+}
+
+// ==================== 请求消息 ====================
+
+message ValidateTokenRequest {
+    string token = 1;
+}
+
+message CheckPermissionRequest {
+    int32 user_id = 1;
+    string resource = 2;  // 资源名称，如 "device", "firmware"
+    string action = 3;    // 操作类型，如 "read", "write", "delete"
+}
+
+message GetUserByIdRequest {
+    int32 user_id = 1;
+}
+
+message GetUserPermissionsRequest {
+    int32 user_id = 1;
+}
+
+message VerifyCredentialsRequest {
+    string username = 1;
+    string password = 2;
+}
+
+// ==================== 响应消息 ====================
+
+message ValidateTokenResponse {
+    bool valid = 1;
+    int32 user_id = 2;
+    string username = 3;
+    string error_message = 4;
+}
+
+message CheckPermissionResponse {
+    bool allowed = 1;
+    string reason = 2;
+}
+
+message UserResponse {
+    int32 id = 1;
+    string username = 2;
+    string email = 3;
+    string full_name = 4;
+    bool is_active = 5;
+    bool is_superuser = 6;
+    string created_at = 7;
+    repeated RoleInfo roles = 8;
+}
+
+message RoleInfo {
+    int32 id = 1;
+    string name = 2;
+    string description = 3;
+}
+
+message PermissionInfo {
+    int32 id = 1;
+    string name = 2;
+    string resource = 3;
+    string action = 4;
+    string description = 5;
+}
+
+message PermissionListResponse {
+    repeated PermissionInfo permissions = 1;
+}
+
+message VerifyCredentialsResponse {
+    bool success = 1;
+    int32 user_id = 2;
+    string access_token = 3;
+    string token_type = 4;
+    string error_message = 5;
+}

@@ -34,9 +34,9 @@ class CRUDDevice:
         update_data = obj_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_obj, field, value)
-            db.add(db_obj)
-            db.commit()
-            db.refresh(db_obj)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
         return db_obj
 
     def delete(self, db: Session, id: int) -> Device:
@@ -50,11 +50,11 @@ class CRUDDevice:
         device = self.get_by_device_id(db, device_id)
         if device:
             device.status = status
-        if status == "online":
-            device.last_online_at = datetime.utcnow()
-        db.add(device)
-        db.commit()
-        db.refresh(device)
+            if status == "online":
+                device.last_online_at = datetime.utcnow()
+            db.add(device)
+            db.commit()
+            db.refresh(device)
         return device
 
     def get_online_devices(self, db: Session) -> List[Device]:
@@ -116,16 +116,16 @@ class CRUDDeviceCommand:
         db.refresh(db_obj)
         return db_obj
 
-    def update_status(self, db: Session, command_id: int, status: str,response_data: Optional[Dict[str, Any]] = None) -> Optional[DeviceCommand]:
+    def update_status(self, db: Session, command_id: int, status: str, response_data: Optional[Dict[str, Any]] = None) -> Optional[DeviceCommand]:
         command = db.query(DeviceCommand).get(command_id)
         if command:
             command.status = status
-        if status == "sent":
-            command.sent_at = datetime.utcnow()
-        elif status == "acknowledged":
-            command.acknowledged_at = datetime.utcnow()
-        if response_data:
-            command.response_data = response_data
+            if status == "sent":
+                command.sent_at = datetime.utcnow()
+            elif status == "acknowledged":
+                command.acknowledged_at = datetime.utcnow()
+            if response_data:
+                command.response_data = response_data
             db.add(command)
             db.commit()
             db.refresh(command)

@@ -7,7 +7,11 @@
       "Bash(python run_tests.py:*)",
       "Bash(timeout 120 python -m pytest:*)",
       "Bash(mv:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(tree:*)",
+      "Bash(git -C /Users/feng/test_pro/aiot-sys/wf_iot/iot_backend log --oneline)",
+      "Bash(cat:*)",
+      "Bash(chmod:*)"
     ],
     "deny": [],
     "ask": []

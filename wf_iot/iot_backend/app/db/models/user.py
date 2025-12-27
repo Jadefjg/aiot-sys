@@ -13,9 +13,9 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     full_name = Column(String(100), nullable=True)
     is_active = Column(Boolean, default=True)
-    is_supperuser = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    is_superuser = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # 关系
     roles = relationship("UserRole", back_populates="user")
@@ -39,10 +39,11 @@ class Permission(Base):
     __tablename__ = "permissions"
 
     id = Column(Integer, primary_key=True, index=True)
-    name = Column(String(50), unique=True, index=True, nullable=False) # e.g.,"device:read", "user:create"
+    name = Column(String(100), nullable=False)  # 权限名称，如 "读取设备"
+    code = Column(String(50), unique=True, index=True, nullable=False)  # 权限代码，如 "device:read"
     description = Column(String(255), nullable=True)
-    resource = Column(String(100), nullable=False)
-    action = Column(String(100), nullable=False)
+    resource = Column(String(100), nullable=False)  # 资源类型
+    action = Column(String(100), nullable=False)  # 操作类型
 
     # 关系
     roles = relationship("RolePermission", back_populates="permission", cascade="all,delete-orphan")

@@ -43,6 +43,12 @@ class RoleBase(BaseModel):
 class RoleCreate(RoleBase):
     pass
 
+
+class RoleUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
 class Role(RoleBase):
     id: int
 

@@ -1,0 +1,366 @@
+# IoT微服务架构 Docker Compose配置
+# 包含所有微服务、数据库、消息队列、API网关等
+
+version: '3.8'
+
+services:
+  # ===========================================
+  # 基础设施服务
+  # ===========================================
+
+  # MySQL数据库 - Auth服务
+  mysql-auth:
+    image: mysql:8.0
+    container_name: mysql-auth
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: iot_auth
+      MYSQL_USER: iot_auth
+      MYSQL_PASSWORD: auth123456
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_auth_data:/var/lib/mysql
+      - ./init-databases.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+
+  # MySQL数据库 - Device服务
+  mysql-device:
+    image: mysql:8.0
+    container_name: mysql-device
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: iot_device
+      MYSQL_USER: iot_device
+      MYSQL_PASSWORD: device123456
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql_device_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+
+  # MySQL数据库 - Firmware服务
+  mysql-firmware:
+    image: mysql:8.0
+    container_name: mysql-firmware
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root123456
+      MYSQL_DATABASE: iot_firmware
+      MYSQL_USER: iot_firmware
+      MYSQL_PASSWORD: firmware123456
+    ports:
+      - "3309:3306"
+    volumes:
+      - mysql_firmware_data:/var/lib/mysql
+    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+
+  # Redis - 缓存和消息队列
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+
+  # EMQX MQTT Broker
+  emqx:
+    image: emqx/emqx:5.3
+    container_name: emqx
+    restart: always
+    environment:
+      EMQX_NAME: iot-mqtt
+      EMQX_HOST: 0.0.0.0
+      EMQX_LOADED_PLUGINS: "emqx_dashboard,emqx_management,emqx_auth_mnesia"
+      EMQX_ALLOW_ANONYMOUS: "false"
+    ports:
+      - "1883:1883"    # MQTT TCP
+      - "8083:8083"    # MQTT WebSocket
+      - "8084:8084"    # MQTT WebSocket SSL
+      - "8883:8883"    # MQTT SSL
+      - "18083:18083"  # Dashboard
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - emqx_log:/opt/emqx/log
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+
+  # ===========================================
+  # 微服务
+  # ===========================================
+
+  # Auth Service - 认证授权服务
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: always
+    environment:
+      SERVICE_NAME: auth-service
+      HTTP_PORT: "8101"
+      GRPC_PORT: "50051"
+      DATABASE_URL: mysql+pymysql://iot_auth:auth123456@mysql-auth:3306/iot_auth?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET_KEY: your-super-secret-jwt-key-change-in-production
+      JWT_ALGORITHM: HS256
+      JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+    ports:
+      - "8101:8101"
+      - "50051:50051"
+    depends_on:
+      mysql-auth:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./proto/generated:/app/proto_generated:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8101/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - iot-network
+
+  # Device Service - 设备管理服务
+  device-service:
+    build:
+      context: ./services/device-service
+      dockerfile: Dockerfile
+    container_name: device-service
+    restart: always
+    environment:
+      SERVICE_NAME: device-service
+      HTTP_PORT: "8102"
+      GRPC_PORT: "50052"
+      DATABASE_URL: mysql+pymysql://iot_device:device123456@mysql-device:3306/iot_device?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/1
+      AUTH_SERVICE_GRPC: auth-service:50051
+      MQTT_GATEWAY_GRPC: mqtt-gateway:50054
+    ports:
+      - "8102:8102"
+      - "50052:50052"
+    depends_on:
+      mysql-device:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - ./proto/generated:/app/proto_generated:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8102/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - iot-network
+
+  # Firmware Service - 固件管理服务
+  firmware-service:
+    build:
+      context: ./services/firmware-service
+      dockerfile: Dockerfile
+    container_name: firmware-service
+    restart: always
+    environment:
+      SERVICE_NAME: firmware-service
+      HTTP_PORT: "8103"
+      GRPC_PORT: "50053"
+      DATABASE_URL: mysql+pymysql://iot_firmware:firmware123456@mysql-firmware:3306/iot_firmware?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/2
+      AUTH_SERVICE_GRPC: auth-service:50051
+      MQTT_GATEWAY_GRPC: mqtt-gateway:50054
+      CELERY_BROKER_URL: redis://redis:6379/3
+      CELERY_RESULT_BACKEND: redis://redis:6379/4
+      FIRMWARE_UPLOAD_DIR: /app/firmware_storage
+      FIRMWARE_BASE_URL: http://firmware-service:8103/files
+    ports:
+      - "8103:8103"
+      - "50053:50053"
+    depends_on:
+      mysql-firmware:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    volumes:
+      - ./proto/generated:/app/proto_generated:ro
+      - firmware_storage:/app/firmware_storage
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8103/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - iot-network
+
+  # Firmware Celery Worker - 固件升级异步任务处理
+  firmware-celery-worker:
+    build:
+      context: ./services/firmware-service
+      dockerfile: Dockerfile
+    container_name: firmware-celery-worker
+    restart: always
+    command: celery -A app.tasks.firmware_tasks.celery_app worker --loglevel=info
+    environment:
+      SERVICE_NAME: firmware-celery-worker
+      DATABASE_URL: mysql+pymysql://iot_firmware:firmware123456@mysql-firmware:3306/iot_firmware?charset=utf8mb4
+      REDIS_URL: redis://redis:6379/2
+      CELERY_BROKER_URL: redis://redis:6379/3
+      CELERY_RESULT_BACKEND: redis://redis:6379/4
+      MQTT_GATEWAY_GRPC: mqtt-gateway:50054
+    depends_on:
+      redis:
+        condition: service_healthy
+      firmware-service:
+        condition: service_healthy
+      mqtt-gateway:
+        condition: service_healthy
+    volumes:
+      - ./proto/generated:/app/proto_generated:ro
+      - firmware_storage:/app/firmware_storage
+    networks:
+      - iot-network
+
+  # MQTT Gateway - MQTT网关服务
+  mqtt-gateway:
+    build:
+      context: ./services/mqtt-gateway
+      dockerfile: Dockerfile
+    container_name: mqtt-gateway
+    restart: always
+    environment:
+      SERVICE_NAME: mqtt-gateway
+      GRPC_PORT: "50054"
+      MQTT_BROKER_HOST: emqx
+      MQTT_BROKER_PORT: "1883"
+      MQTT_USERNAME: iot_gateway
+      MQTT_PASSWORD: gateway123456
+      MQTT_CLIENT_ID: iot-mqtt-gateway
+      REDIS_URL: redis://redis:6379/5
+      AUTH_SERVICE_GRPC: auth-service:50051
+    ports:
+      - "50054:50054"
+    depends_on:
+      emqx:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./proto/generated:/app/proto_generated:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import grpc; print('ok')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - iot-network
+
+  # ===========================================
+  # API网关
+  # ===========================================
+
+  # Kong API Gateway
+  kong:
+    image: kong:3.5
+    container_name: kong
+    restart: always
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_DNS_RESOLVER: 127.0.0.11
+    ports:
+      - "8000:8000"   # Kong代理端口
+      - "8443:8443"   # Kong代理SSL端口
+      - "8001:8001"   # Kong管理端口
+      - "8444:8444"   # Kong管理SSL端口
+    volumes:
+      - ./kong:/kong:ro
+    depends_on:
+      - auth-service
+      - device-service
+      - firmware-service
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - iot-network
+
+# ===========================================
+# 网络配置
+# ===========================================
+networks:
+  iot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ===========================================
+# 数据卷
+# ===========================================
+volumes:
+  mysql_auth_data:
+    driver: local
+  mysql_device_data:
+    driver: local
+  mysql_firmware_data:
+    driver: local
+  redis_data:
+    driver: local
+  emqx_data:
+    driver: local
+  emqx_log:
+    driver: local
+  firmware_storage:
+    driver: local

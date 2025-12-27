@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
-        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD} @ {self.MYSQL_HOST}:{self.MYSQL_PORT} / {self.MYSQL_DATABASE}"
+        return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}"
 
     # redis配置
     REDIS_HOST: str = "localhost"
@@ -46,8 +46,16 @@ class Settings(BaseSettings):
 
     # 应用配置
     PROJECT_NAME: str = "IoT System"
-    VERSION: str = "1.0.0"
+    PROJECT_VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
+
+    # CORS 配置
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+
+    @property
+    def CORS_ORIGINS_LIST(self) -> list:
+        return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
 
     class Config:
         env_file = ".env"

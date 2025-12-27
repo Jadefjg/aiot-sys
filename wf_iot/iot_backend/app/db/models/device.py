@@ -19,8 +19,8 @@ class Device(Base):
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
     device_metadata = Column(JSON, nullable=True) # 存储设备额外信息，如位置、传感器类型等
-    created_at = Column(DateTime, default=datetime.now)
-    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # 关系
     owner = relationship("User", back_populates="devices")
@@ -33,11 +33,11 @@ class DeviceData(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.now, index=True)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     data_type = Column(String(50), nullable=True) # telemetry, event, alarm, etc
     data = Column(JSON, nullable=False) # 存储传感器数据，如 {"temperature": 25.5,"humidity": 60}
     quality = Column(String(50), default="good") # good, bad, uncertain
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系
     device = relationship("Device", back_populates="data_records")
@@ -55,7 +55,7 @@ class DeviceCommand(Base):
     acknowledged_at = Column(DateTime, nullable=True)
     response_data = Column(JSON, nullable=True)
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系
     device = relationship("Device")

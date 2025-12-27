@@ -1,0 +1,188 @@
+syntax = "proto3";
+
+package firmware;
+
+option go_package = "proto/firmware";
+
+// Firmware Service - 固件管理服务
+service FirmwareService {
+    // 固件CRUD
+    rpc GetFirmware(GetFirmwareRequest) returns (FirmwareResponse);
+    rpc ListFirmware(ListFirmwareRequest) returns (FirmwareListResponse);
+    rpc CreateFirmware(CreateFirmwareRequest) returns (FirmwareResponse);
+    rpc UpdateFirmware(UpdateFirmwareRequest) returns (FirmwareResponse);
+    rpc DeleteFirmware(DeleteFirmwareRequest) returns (DeleteResponse);
+
+    // 固件升级任务
+    rpc CreateUpgradeTask(CreateUpgradeTaskRequest) returns (UpgradeTaskResponse);
+    rpc GetUpgradeTask(GetUpgradeTaskRequest) returns (UpgradeTaskResponse);
+    rpc ListUpgradeTasks(ListUpgradeTasksRequest) returns (UpgradeTaskListResponse);
+    rpc UpdateUpgradeTaskStatus(UpdateUpgradeTaskStatusRequest) returns (UpgradeTaskResponse);
+    rpc CancelUpgradeTask(CancelUpgradeTaskRequest) returns (UpgradeTaskResponse);
+
+    // 查询适用固件
+    rpc GetLatestFirmware(GetLatestFirmwareRequest) returns (FirmwareResponse);
+    rpc CheckUpgradeAvailable(CheckUpgradeAvailableRequest) returns (CheckUpgradeResponse);
+}
+
+// ==================== 固件信息 ====================
+
+message FirmwareInfo {
+    int32 id = 1;
+    string version = 2;
+    string product_id = 3;
+    string file_name = 4;
+    string file_path = 5;
+    string file_url = 6;
+    int64 file_size = 7;
+    string file_hash = 8;
+    string description = 9;
+    string release_notes = 10;
+    bool is_active = 11;
+    bool is_beta = 12;
+    string min_hardware_version = 13;
+    int32 created_by = 14;
+    string created_at = 15;
+}
+
+// ==================== 固件请求/响应 ====================
+
+message GetFirmwareRequest {
+    int32 id = 1;
+}
+
+message ListFirmwareRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string product_id = 3;
+    bool active_only = 4;
+}
+
+message CreateFirmwareRequest {
+    string version = 1;
+    string product_id = 2;
+    string file_name = 3;
+    string file_path = 4;
+    string file_url = 5;
+    int64 file_size = 6;
+    string file_hash = 7;
+    string description = 8;
+    string release_notes = 9;
+    bool is_beta = 10;
+    string min_hardware_version = 11;
+    int32 created_by = 12;
+}
+
+message UpdateFirmwareRequest {
+    int32 id = 1;
+    string description = 2;
+    string release_notes = 3;
+    bool is_active = 4;
+    bool is_beta = 5;
+}
+
+message DeleteFirmwareRequest {
+    int32 id = 1;
+}
+
+message GetLatestFirmwareRequest {
+    string product_id = 1;
+    bool include_beta = 2;
+}
+
+message CheckUpgradeAvailableRequest {
+    string product_id = 1;
+    string current_version = 2;
+    string hardware_version = 3;
+}
+
+message FirmwareResponse {
+    bool success = 1;
+    FirmwareInfo firmware = 2;
+    string error_message = 3;
+}
+
+message FirmwareListResponse {
+    bool success = 1;
+    repeated FirmwareInfo firmwares = 2;
+    int32 total = 3;
+    int32 page = 4;
+    int32 page_size = 5;
+    string error_message = 6;
+}
+
+message DeleteResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message CheckUpgradeResponse {
+    bool upgrade_available = 1;
+    FirmwareInfo latest_firmware = 2;
+    string error_message = 3;
+}
+
+// ==================== 升级任务 ====================
+
+message UpgradeTaskInfo {
+    int64 id = 1;
+    int32 device_id = 2;
+    string device_identifier = 3;   // 设备唯一标识符
+    int32 firmware_id = 4;
+    string firmware_version = 5;
+    string status = 6;              // pending, in_progress, success, failed, cancelled
+    int32 progress = 7;             // 0-100
+    string celery_task_id = 8;
+    string start_time = 9;
+    string end_time = 10;
+    string error_message = 11;
+    int32 retry_count = 12;
+    int32 max_retries = 13;
+    int32 created_by = 14;
+    string created_at = 15;
+    string updated_at = 16;
+}
+
+message CreateUpgradeTaskRequest {
+    string device_id = 1;           // 设备唯一标识符
+    int32 firmware_id = 2;
+    int32 created_by = 3;
+    int32 max_retries = 4;
+}
+
+message GetUpgradeTaskRequest {
+    int64 id = 1;
+}
+
+message ListUpgradeTasksRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string device_id = 3;           // 可选过滤
+    string status = 4;              // 可选过滤
+}
+
+message UpdateUpgradeTaskStatusRequest {
+    int64 id = 1;
+    string status = 2;
+    int32 progress = 3;
+    string error_message = 4;
+}
+
+message CancelUpgradeTaskRequest {
+    int64 id = 1;
+}
+
+message UpgradeTaskResponse {
+    bool success = 1;
+    UpgradeTaskInfo task = 2;
+    string error_message = 3;
+}
+
+message UpgradeTaskListResponse {
+    bool success = 1;
+    repeated UpgradeTaskInfo tasks = 2;
+    int32 total = 3;
+    int32 page = 4;
+    int32 page_size = 5;
+    string error_message = 6;
+}

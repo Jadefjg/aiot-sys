@@ -1,0 +1,228 @@
+syntax = "proto3";
+
+package device;
+
+option go_package = "proto/device";
+
+import "google/protobuf/struct.proto";
+
+// Device Service - 设备管理服务
+service DeviceService {
+    // 设备CRUD操作
+    rpc GetDevice(GetDeviceRequest) returns (DeviceResponse);
+    rpc GetDeviceByDeviceId(GetDeviceByDeviceIdRequest) returns (DeviceResponse);
+    rpc ListDevices(ListDevicesRequest) returns (DeviceListResponse);
+    rpc CreateDevice(CreateDeviceRequest) returns (DeviceResponse);
+    rpc UpdateDevice(UpdateDeviceRequest) returns (DeviceResponse);
+    rpc DeleteDevice(DeleteDeviceRequest) returns (DeleteResponse);
+
+    // 设备状态管理
+    rpc UpdateDeviceStatus(UpdateDeviceStatusRequest) returns (DeviceResponse);
+    rpc BatchUpdateStatus(BatchUpdateStatusRequest) returns (BatchUpdateStatusResponse);
+
+    // 设备数据操作
+    rpc SaveDeviceData(SaveDeviceDataRequest) returns (DeviceDataResponse);
+    rpc GetDeviceData(GetDeviceDataRequest) returns (DeviceDataListResponse);
+    rpc GetLatestDeviceData(GetLatestDeviceDataRequest) returns (DeviceDataResponse);
+
+    // 设备命令操作
+    rpc CreateDeviceCommand(CreateDeviceCommandRequest) returns (DeviceCommandResponse);
+    rpc UpdateCommandStatus(UpdateCommandStatusRequest) returns (DeviceCommandResponse);
+    rpc GetDeviceCommands(GetDeviceCommandsRequest) returns (DeviceCommandListResponse);
+}
+
+// ==================== 设备消息 ====================
+
+message DeviceInfo {
+    int32 id = 1;
+    string device_id = 2;           // 设备唯一标识符
+    string device_name = 3;
+    string product_id = 4;
+    string device_type = 5;
+    int32 owner_id = 6;
+    string status = 7;              // online, offline, active, inactive
+    string last_online_at = 8;
+    string firmware_version = 9;
+    string hardware_version = 10;
+    double latitude = 11;
+    double longitude = 12;
+    google.protobuf.Struct device_metadata = 13;
+    string created_at = 14;
+    string updated_at = 15;
+}
+
+// ==================== 设备请求/响应 ====================
+
+message GetDeviceRequest {
+    int32 id = 1;
+}
+
+message GetDeviceByDeviceIdRequest {
+    string device_id = 1;
+}
+
+message ListDevicesRequest {
+    int32 page = 1;
+    int32 page_size = 2;
+    string status = 3;              // 可选过滤条件
+    string product_id = 4;
+    int32 owner_id = 5;
+}
+
+message CreateDeviceRequest {
+    string device_id = 1;
+    string device_name = 2;
+    string product_id = 3;
+    string device_type = 4;
+    int32 owner_id = 5;
+    string firmware_version = 6;
+    string hardware_version = 7;
+    double latitude = 8;
+    double longitude = 9;
+    google.protobuf.Struct device_metadata = 10;
+}
+
+message UpdateDeviceRequest {
+    int32 id = 1;
+    string device_name = 2;
+    string device_type = 3;
+    string firmware_version = 4;
+    string hardware_version = 5;
+    double latitude = 6;
+    double longitude = 7;
+    google.protobuf.Struct device_metadata = 8;
+}
+
+message DeleteDeviceRequest {
+    int32 id = 1;
+}
+
+message UpdateDeviceStatusRequest {
+    string device_id = 1;           // 使用device_id而非id
+    string status = 2;
+    string last_online_at = 3;      // 可选，如果online则更新
+}
+
+message BatchUpdateStatusRequest {
+    repeated string device_ids = 1;
+    string status = 2;
+}
+
+message DeviceResponse {
+    bool success = 1;
+    DeviceInfo device = 2;
+    string error_message = 3;
+}
+
+message DeviceListResponse {
+    bool success = 1;
+    repeated DeviceInfo devices = 2;
+    int32 total = 3;
+    int32 page = 4;
+    int32 page_size = 5;
+    string error_message = 6;
+}
+
+message DeleteResponse {
+    bool success = 1;
+    string error_message = 2;
+}
+
+message BatchUpdateStatusResponse {
+    bool success = 1;
+    int32 updated_count = 2;
+    string error_message = 3;
+}
+
+// ==================== 设备数据消息 ====================
+
+message DeviceDataInfo {
+    int64 id = 1;
+    int32 device_id = 2;
+    string timestamp = 3;
+    string data_type = 4;           // telemetry, event, alarm
+    google.protobuf.Struct data = 5;
+    string quality = 6;             // good, bad, uncertain
+    string created_at = 7;
+}
+
+message SaveDeviceDataRequest {
+    string device_id = 1;           // 使用设备唯一标识符
+    string data_type = 2;
+    google.protobuf.Struct data = 3;
+    string quality = 4;
+    string timestamp = 5;           // 可选，默认当前时间
+}
+
+message GetDeviceDataRequest {
+    string device_id = 1;
+    string start_time = 2;
+    string end_time = 3;
+    string data_type = 4;
+    int32 limit = 5;
+}
+
+message GetLatestDeviceDataRequest {
+    string device_id = 1;
+    string data_type = 2;           // 可选
+}
+
+message DeviceDataResponse {
+    bool success = 1;
+    DeviceDataInfo data = 2;
+    string error_message = 3;
+}
+
+message DeviceDataListResponse {
+    bool success = 1;
+    repeated DeviceDataInfo data_list = 2;
+    int32 total = 3;
+    string error_message = 4;
+}
+
+// ==================== 设备命令消息 ====================
+
+message DeviceCommandInfo {
+    int64 id = 1;
+    int32 device_id = 2;
+    string command_type = 3;        // control, config, upgrade
+    google.protobuf.Struct command_data = 4;
+    string status = 5;              // pending, sent, acknowledged, failed
+    string sent_at = 6;
+    string acknowledged_at = 7;
+    google.protobuf.Struct response_data = 8;
+    int32 created_by = 9;
+    string created_at = 10;
+}
+
+message CreateDeviceCommandRequest {
+    string device_id = 1;           // 使用设备唯一标识符
+    string command_type = 2;
+    google.protobuf.Struct command_data = 3;
+    int32 created_by = 4;
+}
+
+message UpdateCommandStatusRequest {
+    int64 command_id = 1;
+    string status = 2;
+    google.protobuf.Struct response_data = 3;
+}
+
+message GetDeviceCommandsRequest {
+    string device_id = 1;
+    string status = 2;              // 可选过滤
+    int32 limit = 3;
+}
+
+message DeviceCommandResponse {
+    bool success = 1;
+    DeviceCommandInfo command = 2;
+    string error_message = 3;
+}
+
+message DeviceCommandListResponse {
+    bool success = 1;
+    repeated DeviceCommandInfo commands = 2;
+    int32 total = 3;
+    string error_message = 4;
+}

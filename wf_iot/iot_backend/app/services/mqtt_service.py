@@ -7,7 +7,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.crud.device import device_crud, device_command_crud, device_command_crud
+from app.crud.device import device_crud, device_data_crud, device_command_crud
 from app.schemas.device import DeviceDataCreate, DeviceUpdate
 
 # 配置日志
@@ -85,8 +85,8 @@ class MQTTService:
                     data=data.get("data",{}),
                     quality=data.get("quality","good")
                 )
-                device_command_crud.create(db,obj_in=device_data)
-                logger.info(f"Created new device: {device_id}")
+                device_data_crud.create(db, obj_in=device_data)
+                logger.info(f"Saved device data: {device_id}")
             finally:
                 db.close()
         except json.JSONDecodeError:

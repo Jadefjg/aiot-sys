@@ -20,13 +20,13 @@ class Firmware(Base):
     release_notes = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=True)
     is_beta = Column(Boolean, nullable=True)
-    min_harware_version = Column(String(50), nullable=True)
+    min_hardware_version = Column(String(50), nullable=True)
     create_by = Column(Integer, ForeignKey("users.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.now)
+    created_at = Column(DateTime, default=datetime.utcnow)
 
     # 关系
     creator = relationship("User", foreign_keys=[create_by])
-    upgrade_tasks = relationship("FirmwareUpgradeTask", back_populates="upgrade_task")
+    upgrade_tasks = relationship("FirmwareUpgradeTask", back_populates="firmware")
 
     # 唯一约束
     __table_args__ = (
@@ -39,11 +39,11 @@ class FirmwareUpgradeTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False)  # 目标设备
-    firmware_id = Column(Integer, ForeignKey("firmwares.id"), nullable=False)  #目标固件
-    status = Column(String(20), default="pending")  # pending, in_progress,success, failed, cancelled
+    firmware_id = Column(Integer, ForeignKey("firmware.id"), nullable=False)  # 目标固件
+    status = Column(String(20), default="pending")  # pending, in_progress, success, failed, cancelled
     progress = Column(Integer, default=0)  # 升级进度 (0-100)
     celery_task_id = Column(String(100), nullable=True, index=True)
-    start_time = Column(DateTime, default=datetime.now)
+    start_time = Column(DateTime, default=datetime.utcnow)
     end_time = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0)
