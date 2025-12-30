@@ -17,9 +17,9 @@ def create_permission(
     current_user: User = Depends(get_current_active_superuser)
 ):
     """
-    ��CPŅ�(7	
+    创建权限（需要超级用户）
     """
-    # ��CP�/&�X(
+    # 检查权限名称是否已存在
     db_permission = permission_crud.get_by_name(db, name=permission_in.name)
     if db_permission:
         raise HTTPException(
@@ -37,7 +37,7 @@ def get_permissions(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    ��CPh
+    获取权限列表
     """
     permissions = permission_crud.get_multi(db, skip=skip, limit=limit)
     return permissions
@@ -50,7 +50,7 @@ def get_permission(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    9nID��CP��
+    根据ID获取权限详情
     """
     permission = permission_crud.get(db, permission_id=permission_id)
     if not permission:
@@ -68,7 +68,7 @@ def get_permissions_by_resource(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    9nD�{���CPh
+    根据资源类型获取权限列表
     """
     permissions = permission_crud.get_by_resource(db, resource=resource)
     return permissions
@@ -81,7 +81,7 @@ def get_permissions_by_action(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    9n�\{���CPh
+    根据操作类型获取权限列表
     """
     permissions = permission_crud.get_by_action(db, action=action)
     return permissions
@@ -95,7 +95,7 @@ def update_permission(
     current_user: User = Depends(get_current_active_superuser)
 ):
     """
-    ��CP�oŅ�(7	
+    更新权限（需要超级用户）
     """
     permission = permission_crud.get(db, permission_id=permission_id)
     if not permission:
@@ -104,7 +104,7 @@ def update_permission(
             detail="Permission not found"
         )
 
-    # ��������/&�X(
+    # 如果更改名称，检查是否重复
     if permission_in.name and permission_in.name != permission.name:
         existing_permission = permission_crud.get_by_name(db, name=permission_in.name)
         if existing_permission:
@@ -123,7 +123,7 @@ def delete_permission(
     current_user: User = Depends(get_current_active_superuser)
 ):
     """
-     dCPŅ�(7	
+    删除权限（需要超级用户）
     """
     permission = permission_crud.get(db, permission_id=permission_id)
     if not permission:

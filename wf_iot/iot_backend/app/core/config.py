@@ -1,10 +1,12 @@
 # 作用：配置管理（数据库连接、Redis连接、MQTT配置等）
 
-from pydantic.v1 import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
     # 数据库配置
     MYSQL_HOST: str = "localhost"
     MYSQL_PORT: int = 3306
@@ -56,9 +58,6 @@ class Settings(BaseSettings):
     @property
     def CORS_ORIGINS_LIST(self) -> list:
         return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
-
-    class Config:
-        env_file = ".env"
 
 
 settings = Settings()

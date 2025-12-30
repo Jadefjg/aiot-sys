@@ -1,6 +1,6 @@
 """
-�B!W
-ЛIoTO���;��
+服务层模块
+IoT 系统业务逻辑服务
 """
 
 from .protocol_base import ProtocolService

@@ -109,11 +109,11 @@ services:
       condition: service_started
 
 frontend_app:
-  build: ./iot_frontend
-  container_name: iot_frontend_app
+  build: ./iot_web
+  container_name: iot_web_app
   command: npm run serve # 或 npm run build && serve -s dist
   volumes:
-    - ./iot_frontend:/app
+    - ./iot_web:/app
   ports:
     - "8080:8080" # Vue开发服务器端口
   depends_on:
@@ -129,7 +129,7 @@ nginx:
     - ./nginx/nginx.conf:/etc/nginx/nginx.conf
     - ./nginx/conf.d:/etc/nginx/conf.d
     - ./nginx/ssl:/etc/nginx/ssl
-    - ./iot_frontend/dist:/usr/share/nginx/html/iot_frontend/dist # 挂载前端打包后的文件
+    - ./iot_web/dist:/usr/share/nginx/html/iot_web/dist # 挂载前端打包后的文件
     - ./firmware_storage:/path/to/your/firmware_storage # 挂载固件存储目录
   depends_on:
     - backend_app

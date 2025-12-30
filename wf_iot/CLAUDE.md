@@ -11,7 +11,7 @@ Full-stack **IoT Device Management System** with dual deployment modes:
 ```
 wf_iot/
 ├── iot_backend/     # 后端代码 (FastAPI + 微服务)
-├── iot_frontend/    # 前端代码 (Vue 3)
+├── iot_web/         # 前端代码 (Vue 3)
 └── CLAUDE.md        # 项目文档
 ```
 
@@ -69,7 +69,7 @@ cd proto && ./generate.sh
 
 ### Frontend
 ```bash
-cd iot_frontend
+cd iot_web
 npm install
 npm run dev    # Port 5173 (Vite)
 ```
@@ -137,7 +137,7 @@ Environment variables via `iot_backend/app/core/config.py`:
 - Commit format: `类型: 简短描述`
 - Branch naming: `feature/功能名`, `bugfix/问题描述`, `hotfix/紧急修复`
 
-**Frontend known issues (from iot_frontend/.cursorrules):**
+**Frontend known issues (from iot_web/.cursorrules):**
 - Login.vue: `from`→`form`, `sumbit`→`submit`
 - DevicesManagement.vue: inconsistent function names (`addDevices` vs `addDevice`), missing parameters
 

@@ -206,7 +206,7 @@
      │       ├── app/mqtt/handlers/
      │       ├── app/grpc/server.py
      │       └── app/events/publisher.py
-     └── iot_frontend/                # 保持不变
+     └── iot_web/                     # 前端代码
 
      分阶段实施计划
 

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.db.session import get_db
 from app.crud.user import user_crud
 from app.schemas.user import User, UserCreate, UserUpdate
-from app.core.security import get_current_active_user, get_current_active_superuser
+from app.core.dependencies import get_current_active_user, get_current_active_superuser
 
 
 router = APIRouter()
