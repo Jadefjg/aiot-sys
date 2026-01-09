@@ -10,3 +10,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+
+noede_modules/
+
+note.md

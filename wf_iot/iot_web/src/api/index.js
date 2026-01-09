@@ -4,7 +4,7 @@ import router from '@/router'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: '/iot/api/v1',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json'

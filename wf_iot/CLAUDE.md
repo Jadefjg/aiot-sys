@@ -71,8 +71,12 @@ cd proto && ./generate.sh
 ```bash
 cd iot_web
 npm install
-npm run dev    # Port 5173 (Vite)
+npm run dev      # Dev server on port 5173 (Vite)
+npm run build    # Production build
+npm run preview  # Preview production build
 ```
+
+Tech stack: Vue 3 + Vue Router + Pinia (state) + Element Plus (UI) + Axios
 
 ## Architecture
 
