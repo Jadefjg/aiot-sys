@@ -45,6 +45,12 @@ api.interceptors.response.use(
         case 404:
           ElMessage.error('请求的资源不存在')
           break
+        case 504:
+          ElMessage.error(response.data?.detail || '设备响应超时')
+          break
+        case 503:
+          ElMessage.error(response.data?.detail || '服务暂不可用')
+          break
         case 500:
           ElMessage.error('服务器错误')
           break

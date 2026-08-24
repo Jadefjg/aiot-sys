@@ -35,6 +35,30 @@ const routes = [
         meta: { title: '设备管理' }
       },
       {
+        path: 'devices/:deviceId',
+        name: 'DeviceDetail',
+        component: () => import('@/views/DeviceDetail.vue'),
+        meta: { title: '设备详情' }
+      },
+      {
+        path: 'products',
+        name: 'Products',
+        component: () => import('@/views/ProductManagement.vue'),
+        meta: { title: '产品物模型' }
+      },
+      {
+        path: 'alarms',
+        name: 'Alarms',
+        component: () => import('@/views/AlarmManagement.vue'),
+        meta: { title: '告警中心' }
+      },
+      {
+        path: 'scenes',
+        name: 'Scenes',
+        component: () => import('@/views/SceneManagement.vue'),
+        meta: { title: '智能场景' }
+      },
+      {
         path: 'users',
         name: 'Users',
         component: () => import('@/views/UserManagement.vue'),

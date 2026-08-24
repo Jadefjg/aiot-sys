@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from app.db.session import get_db
 from app.crud.device import device_crud, device_data_crud, device_command_crud
 from app.schemas.user import User
-from app.core.dependencies import get_current_active_user, has_permission
+from app.core.dependencies import get_current_active_user
 from app.services.mqtt_service import mqtt_client
 from app.schemas.device import (
     Device, DeviceCreate, DeviceUpdate,

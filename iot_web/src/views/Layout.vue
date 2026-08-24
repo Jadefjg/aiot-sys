@@ -16,9 +16,21 @@
           <el-icon><Odometer /></el-icon>
           <span>仪表盘</span>
         </el-menu-item>
+        <el-menu-item index="/products">
+          <el-icon><Box /></el-icon>
+          <span>产品物模型</span>
+        </el-menu-item>
         <el-menu-item index="/devices">
           <el-icon><Cpu /></el-icon>
           <span>设备管理</span>
+        </el-menu-item>
+        <el-menu-item index="/alarms">
+          <el-icon><Bell /></el-icon>
+          <span>告警中心</span>
+        </el-menu-item>
+        <el-menu-item index="/scenes">
+          <el-icon><SetUp /></el-icon>
+          <span>智能场景</span>
         </el-menu-item>
         <el-menu-item index="/firmware">
           <el-icon><Upload /></el-icon>

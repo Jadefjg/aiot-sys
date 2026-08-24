@@ -1,31 +1,49 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey,JSON, Float, Text
+from sqlalchemy import (
+    Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.base import Base
+
 
 class Device(Base):
     __tablename__ = "devices"
 
     id = Column(Integer, primary_key=True, index=True)
-    device_id = Column(String(100), unique=True, index=True, nullable=False) # 设备唯一标识符
+    device_id = Column(String(100), unique=True, index=True, nullable=False)
     device_name = Column(String(100), nullable=False)
-    product_id = Column(String(100), nullable=False) # 产品ID，用于区分设备类型
+    product_id = Column(String(100), nullable=False, index=True)
     device_type = Column(String(100), nullable=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True) # 关联用户
-    status = Column(String(20), default="offline") # online, offline, active, inactive
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
+    # 网关/子设备层级：子设备挂 gateway_id
+    gateway_id = Column(String(100), nullable=True, index=True)
+    link_id = Column(String(100), nullable=True)
+    status = Column(String(20), default="offline")
+    disabled = Column(Boolean, default=False)
+    error = Column(Boolean, default=False)
+    error_string = Column(Text, nullable=True)
     last_online_at = Column(DateTime, nullable=True)
-    firmware_version = Column(String(50), nullable=True) # 当前固件版本
+    firmware_version = Column(String(50), nullable=True)
     hardware_version = Column(String(50), nullable=True)
     latitude = Column(Float, nullable=True)
     longitude = Column(Float, nullable=True)
-    device_metadata = Column(JSON, nullable=True) # 存储设备额外信息，如位置、传感器类型等
+    geo_code = Column(String(50), nullable=True)
+    # 最新属性快照（内存态落库）
+    values = Column(JSON, nullable=True, default=dict)
+    device_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    # 关系
     owner = relationship("User", back_populates="devices")
-    data_records = relationship("DeviceData", back_populates="device",cascade="all,delete-orphan")
-    upgrade_tasks = relationship("FirmwareUpgradeTask",back_populates="device", cascade="all,delete-orphan")
+    group = relationship("DeviceGroup", backref="devices")
+    data_records = relationship(
+        "DeviceData", back_populates="device", cascade="all,delete-orphan"
+    )
+    upgrade_tasks = relationship(
+        "FirmwareUpgradeTask", back_populates="device", cascade="all,delete-orphan"
+    )
+    alarms = relationship("Alarm", back_populates="device", cascade="all,delete-orphan")
 
 
 class DeviceData(Base):

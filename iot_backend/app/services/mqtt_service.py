@@ -1,18 +1,38 @@
+"""MQTT 服务：设备生命周期主题总线"""
 import json
 import logging
-import paho.mqtt.client as mqtt
-
 from typing import Optional
-from datetime import datetime
+
+import paho.mqtt.client as mqtt
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.crud.device import device_crud, device_data_crud, device_command_crud
-from app.schemas.device import DeviceDataCreate, DeviceUpdate
+from app.crud.device import device_command_crud
+from app.services.device_runtime_service import device_runtime
 
-# 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+DEVICE_TOPICS = [
+    "device/+/data",
+    "device/+/values",
+    "device/+/property",
+    "device/+/status",
+    "device/+/online",
+    "device/+/offline",
+    "device/+/register",
+    "device/+/location",
+    "device/+/error",
+    "device/+/heartbeat",
+    "device/+/command/response",
+    "device/+/sync/response",
+    "device/+/read/response",
+    "device/+/write/response",
+    "device/+/action/response",
+    "device/+/setting/response",
+    "device/+/firmware/status",
+]
+
 
 class MQTTService:
     def __init__(self):
@@ -20,233 +40,191 @@ class MQTTService:
         self.connected = False
 
     def on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
-            self.connected = True
-            logger.info("Connected to MQTT broker")
-
-            # 订阅设备相关主题
-            topics = [
-                "device/+/data",  # 设备数据上报
-                "device/+/status",  # 设备状态上报
-                "device/+/command/response",  # 命令响应
-                "device/+/heartbeat",  # 设备心跳
-                "device/+/firmware/status"  # 固件升级状态
-            ]
-            for topic in topics:
-                client.subscribe(topic)
-                logger.info(f"Subscribed to topic: {topic}")
-        else:
+        if rc != 0:
             self.connected = False
-            logger.error("Failed to connect to MQTT broker, return code{rc}")
+            logger.error("Failed to connect to MQTT broker, rc=%s", rc)
+            return
+        self.connected = True
+        logger.info("Connected to MQTT broker")
+        for topic in DEVICE_TOPICS:
+            client.subscribe(topic)
+            logger.info("Subscribed: %s", topic)
 
     def on_disconnect(self, client, userdata, rc):
         self.connected = False
-        logger.warning(f"Disconnected from MQTT broker, return code{rc}")
+        logger.warning("Disconnected from MQTT broker, rc=%s", rc)
 
     def on_message(self, client, userdata, msg):
         try:
             topic = msg.topic
-            payload = msg.payload.decode("utf-8")
-            logger.info(f"Received message on topic: {topic} -> payload: {payload}")
-
-            # 解析主题
-            topic_parts = topic.split("/")
-            if len(topic_parts) < 3:
-                logger.warning(f"Invalid topic format:{topic}")
+            payload_raw = msg.payload.decode("utf-8")
+            parts = topic.split("/")
+            if len(parts) < 3 or parts[0] != "device":
                 return
-            device_id = topic_parts[1]
-            message_type = topic_parts[2]
+            device_id, message_type = parts[1], parts[2]
+            suffix = parts[3] if len(parts) > 3 else None
+            if suffix == "response":
+                self._handle_response(payload_raw)
+                if message_type == "command":
+                    self._handle_legacy_command(device_id, payload_raw)
+                return
+            self._dispatch(device_id, message_type, suffix, payload_raw)
+        except Exception as exc:
+            logger.error("Error processing MQTT message: %s", exc)
 
-            # 处理不同类型的消息
-            if message_type == "data":
-                self._handle_device_data(device_id,payload)
-            elif message_type == "status":
-                self._handle_device_status(device_id,payload)
-            elif message_type == "heartbeat":
-                self._handle_device_hearbeat(device_id,payload)
-            elif message_type == "command" and len(topic_parts) > 3 and topic_parts[3] == "response":
-                self._handle_command_response(device_id, payload)
-            elif message_type == "firmware" and len(topic_parts) > 3 and topic_parts[3] == "status":
-                self._handle_firmware_status(device_id, payload)
-            else:
-                logger.warning(f"Unknown message type: {message_type}")
-        except Exception as e:
-            logger.error(f"Error processing MQTT message: {e}")
+    def _dispatch(self, device_id: str, message_type: str, suffix: Optional[str], raw: str):
+        handlers = {
+            "data": self._handle_values,
+            "values": self._handle_values,
+            "property": self._handle_values,
+            "status": self._handle_status,
+            "online": lambda d, _: self._set_online(d, True),
+            "offline": lambda d, _: self._set_online(d, False),
+            "register": self._handle_register,
+            "location": self._handle_location,
+            "error": self._handle_error,
+            "heartbeat": lambda d, _: self._set_online(d, True),
+            "firmware": lambda d, p: logger.info("Firmware status %s: %s", d, p),
+        }
+        handler = handlers.get(message_type)
+        if handler:
+            handler(device_id, raw)
+        else:
+            logger.debug("Unhandled message type: %s", message_type)
 
-    def _handle_device_data(self, device_id, payload:str):
-        """处理设备数据上报"""
+    def _parse(self, raw: str) -> dict:
         try:
-            data = json.loads(payload)
-            db = SessionLocal()
-            try:
-                device_data = DeviceDataCreate(
-                    device_id=device_id,
-                    data_type=data.get("type","telemetry"),
-                    data=data.get("data",{}),
-                    quality=data.get("quality","good")
+            return json.loads(raw) if raw else {}
+        except json.JSONDecodeError:
+            logger.error("Invalid JSON: %s", raw)
+            return {}
+
+    def _handle_values(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        values = data.get("data") if isinstance(data.get("data"), dict) else data
+        if not isinstance(values, dict):
+            return
+        db = SessionLocal()
+        try:
+            device_runtime.put_values(
+                db, device_id, values, publish_alarm=self._publish_alarm
+            )
+        finally:
+            db.close()
+
+    def _handle_status(self, device_id: str, raw: str):
+        status = self._parse(raw).get("status", "unknown")
+        self._set_online(device_id, status == "online")
+
+    def _set_online(self, device_id: str, online: bool, _raw: str = ""):
+        db = SessionLocal()
+        try:
+            device_runtime.set_online(db, device_id, online)
+        finally:
+            db.close()
+
+    def _handle_register(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        db = SessionLocal()
+        try:
+            from app.crud.product import product_crud
+
+            device = device_runtime.register(
+                db,
+                device_id,
+                product_id=data.get("product_id"),
+                device_name=data.get("device_name"),
+                gateway_id=data.get("gateway_id"),
+            )
+            product = product_crud.get_by_product_id(db, device.product_id)
+            if product:
+                self.publish(
+                    f"product/{product.product_id}/model",
+                    json.dumps(product.model or {}),
                 )
-                device_data_crud.create(db, obj_in=device_data)
-                logger.info(f"Saved device data: {device_id}")
-            finally:
-                db.close()
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in device data: {payload}")
-        except Exception as e:
-            logger.error(f"Error processing MQTT message: {e}")
+        finally:
+            db.close()
 
-    def _handle_device_status(self, device_id, payload:str):
-        """处理设备状态上报"""
+    def _handle_location(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        lat, lng = data.get("latitude"), data.get("longitude")
+        if lat is None or lng is None:
+            return
+        db = SessionLocal()
         try:
-            status_data = json.loads(payload)
-            status = status_data.get("status", "unknown")
-            db = SessionLocal()
-            try:
-                device = device_crud.update_status(db, device_id, status)
-                if device:
-                    logger.info(f"Updated status for device {device_id}:{status}")
-                else:
-                    logger.warning(f"Device not found: {device_id}")
-            finally:
-                db.close()
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in device status: {payload}")
-        except Exception as e:
-            logger.error(f"Error handling device status: {e}")
+            device_runtime.set_location(
+                db, device_id, float(lat), float(lng), data.get("geo_code")
+            )
+        finally:
+            db.close()
 
-    def _handle_device_hearbeat(self, device_id:str, payload:str):
+    def _handle_error(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        msg = data.get("error") or data.get("message") or raw
+        db = SessionLocal()
         try:
-            db = SessionLocal()
-            try:
-                device = device_crud.update_status(db, device_id, "online")
-                if device:
-                    logger.debug(f"Heartbeat received from device {device_id}")
-                else:
-                    logger.warning(f"Device not found: {device_id}")
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(f"Error handling device heartbeat: {e}")
+            device_runtime.set_error(db, device_id, str(msg))
+        finally:
+            db.close()
 
-    def _handle_command_response(self, device_id, payload:str):
-        """处理命令响应"""
-        try:
-            response_data = json.loads(payload)
-            command_id = response_data.get("command_id")
-            status = response_data.get("status", "acknowledged")
-            result = response_data.get("result")
-            if command_id:
-                db = SessionLocal()
-                try:
-                    device_command_crud.update_status(
-                        db, command_id, status, {"result": result}
-                    )
-                    logger.info(f"Updated command {command_id} status:{status}")
-                finally:
-                    db.close()
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in command response: {payload}")
-        except Exception as e:
-            logger.error(f"Error handling command response: {e}")
+    def _handle_response(self, raw: str):
+        device_runtime.on_response(self._parse(raw))
 
-    def _handle_firmware_status(self, device_id, payload:str):
-        """处理固件升级状态"""
+    def _handle_legacy_command(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        command_id = data.get("command_id")
+        if not command_id:
+            self._handle_response(raw)
+            return
+        db = SessionLocal()
         try:
-            status_data = json.loads(payload)
-            # 这里可以更新固件升级任务的状态
-            # 具体实现依赖于固件升级模块
-            logger.info(f"Firmware status from device {device_id}:{status_data}")
-        except json.JSONDecodeError:
-            logger.error(f"Invalid JSON in firmware status: {payload}")
-        except Exception as e:
-            logger.error(f"Error handling firmware status: {e}")
+            device_command_crud.update_status(
+                db,
+                command_id,
+                data.get("status", "acknowledged"),
+                {"result": data.get("result")},
+            )
+        finally:
+            db.close()
+
+    def _publish_alarm(self, device_id: str, alarm: dict):
+        self.publish(f"device/{device_id}/alarm", json.dumps(alarm))
 
     def start(self):
-        """启动MQTT客户端"""
         try:
             self.client = mqtt.Client(client_id="iot_backend_service")
             self.client.on_connect = self.on_connect
             self.client.on_disconnect = self.on_disconnect
             self.client.on_message = self.on_message
-            # 设置认证信息
             if settings.MQTT_USERNAME and settings.MQTT_PASSWORD:
-                self.client.username_pw_set(settings.MQTT_USERNAME,settings.MQTT_PASSWORD)
-            # 连接到MQTT代理
-            self.client.connect(settings.MQTT_BROKER_HOST,settings.MQTT_BROKER_PORT, 60)
-            # 启动网络循环
+                self.client.username_pw_set(
+                    settings.MQTT_USERNAME, settings.MQTT_PASSWORD
+                )
+            self.client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, 60)
             self.client.loop_start()
             logger.info("MQTT service started")
-        except Exception as e:
-            logger.error(f"Failed to start MQTT service: {e}")
+        except Exception as exc:
+            logger.error("Failed to start MQTT service: %s", exc)
 
     def stop(self):
-        """停止MQTT客户端"""
         if self.client:
             self.client.loop_stop()
             self.client.disconnect()
             logger.info("MQTT service stopped")
 
     def publish(self, topic: str, payload: str, qos: int = 1):
-        """发布消息"""
-        if self.client and self.connected:
-            try:
-                result = self.client.publish(topic, payload, qos)
-                if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                    logger.info(f"Published message to {topic}")
-                else:
-                    logger.error(f"Failed to publish message to {topic}, errorcode: {result.rc}")
-            except Exception as e:
-                logger.error(f"Error publishing message: {e}")
-        else:
+        if not (self.client and self.connected):
             logger.error("MQTT client not connected")
+            return
+        try:
+            result = self.client.publish(topic, payload, qos)
+            if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                logger.info("Published to %s", topic)
+            else:
+                logger.error("Publish failed %s rc=%s", topic, result.rc)
+        except Exception as exc:
+            logger.error("Error publishing: %s", exc)
 
 
-# 全局MQTT服务实例
 mqtt_service = MQTTService()
-# 为了向后兼容，保留mqtt_client引用
 mqtt_client = mqtt_service
-
-# # MQTT 客户端实例
-# mqtt_client = mqtt.Client(client_id="backend_service")
-#
-#
-# def on_connect(client, userdata, flags, rc):
-#     if rc == 0:
-#         print("Connected to MQTT Broker!")
-#         # 订阅设备数据上报主题
-#         client.subscribe("device/+/data")
-#         client.subscribe("device/+/status")
-#     else:
-#         print(f"Failed to connect, return code {rc}\n")
-#
-#
-# def on_message(client, userdata, msg):
-#     print(f"Received message: {msg.topic} {msg.payload.decode()}")
-#     topic_parts = msg.topic.split('/')
-#     device_id = topic_parts[1]
-#     message_type = topic_parts[2]
-#     db = SessionLocal()
-#     try:
-#         if message_type == "data":
-#             payload = json.loads(msg.payload.decode())
-#             device_data = DeviceDataCreate(device_id=device_id, data=payload)
-#             device_crud.record_device_data(db, device_data)
-#             # 可以在这里触发Celery任务进行数据处理或告警
-#         elif message_type == "status":
-#             status_payload = json.loads(msg.payload.decode())
-#             db_device = device_crud.get_device_by_unique_id(db, device_id)
-#         if db_device:
-#             device_crud.update_device(db, db_device,DeviceUpdate(status=status_payload.get("status")))
-#     except Exception as e:
-#         print(f"Error processing MQTT message: {e}")
-#     finally:
-#         db.close()
-#
-#
-# def start_mqtt_client():
-#     mqtt_client.on_connect = on_connect
-#     mqtt_client.on_message = on_message
-#     mqtt_client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
-#     mqtt_client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT,60)
-#     mqtt_client.loop_start() # 在后台线程运行，处理网络流量、回调等
-#     # 在FastAPI启动时调用 start_mqtt_client()
-#     # 在FastAPI关闭时调用 mqtt_client.loop_stop() 和 mqtt_client.disconnect()

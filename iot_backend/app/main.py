@@ -12,6 +12,14 @@ async def lifespan(app: FastAPI):
     # 启动时执行
     print("Starting IOT Backend Service...")
 
+    # 确保物联中台相关表结构
+    try:
+        from app.db.init_db import ensure_schema
+        ensure_schema()
+        print("✓ Database schema ready")
+    except Exception as e:
+        print(f"✗ Database schema init: {e}")
+
     # 初始化协议管理器
     protocol_manager.initialize()
 

@@ -57,8 +57,11 @@
             {{ formatTime(row.last_online_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="280" fixed="right">
+        <el-table-column label="操作" width="340" fixed="right">
           <template #default="{ row }">
+            <el-button type="primary" size="small" @click="$router.push(`/devices/${row.device_id}`)">
+              详情
+            </el-button>
             <el-button type="primary" size="small" @click="showEditDialog(row)">
               编辑
             </el-button>
@@ -91,6 +94,9 @@
         </el-form-item>
         <el-form-item label="产品ID" prop="product_id">
           <el-input v-model="deviceForm.product_id" placeholder="请输入产品ID" />
+        </el-form-item>
+        <el-form-item label="所属网关">
+          <el-input v-model="deviceForm.gateway_id" placeholder="子设备填写网关 device_id，可空" />
         </el-form-item>
         <el-form-item label="设备密钥" prop="device_secret" v-if="!isEditing">
           <el-input v-model="deviceForm.device_secret" placeholder="请输入设备密钥" />
@@ -187,6 +193,7 @@ const deviceForm = reactive({
   device_id: '',
   device_name: '',
   product_id: '',
+  gateway_id: '',
   device_secret: ''
 })
 
@@ -244,6 +251,7 @@ const showAddDialog = () => {
     device_id: '',
     device_name: '',
     product_id: '',
+    gateway_id: '',
     device_secret: ''
   })
   deviceDialogVisible.value = true
@@ -257,6 +265,7 @@ const showEditDialog = (device) => {
     device_id: device.device_id,
     device_name: device.device_name,
     product_id: device.product_id,
+    gateway_id: device.gateway_id || '',
     device_secret: ''
   })
   deviceDialogVisible.value = true
@@ -273,7 +282,7 @@ const handleDeviceSubmit = async () => {
         if (isEditing.value) {
           await updateDevice(selectedDevice.value.device_id, {
             device_name: deviceForm.device_name,
-            product_id: deviceForm.product_id
+            gateway_id: deviceForm.gateway_id || null
           })
           ElMessage.success('设备更新成功')
         } else {

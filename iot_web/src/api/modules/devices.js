@@ -54,3 +54,19 @@ export const controlDevice = (deviceId, command) => {
 export const sendCommand = (deviceId, command) => {
   return api.post(`/devices/${deviceId}/commands`, command)
 }
+
+export const getDeviceValues = (deviceId) => api.get(`/devices/${deviceId}/values`)
+export const putDeviceValues = (deviceId, values) =>
+  api.post(`/devices/${deviceId}/values`, { values })
+export const syncDevice = (deviceId) =>
+  api.get(`/devices/${deviceId}/sync`, { timeout: 35000 })
+export const readDevice = (deviceId, points = []) =>
+  api.post(`/devices/${deviceId}/read`, { points }, { timeout: 35000 })
+export const writeDevice = (deviceId, values) =>
+  api.post(`/devices/${deviceId}/write`, { values }, { timeout: 35000 })
+export const invokeAction = (deviceId, action, params = {}) =>
+  api.post(`/devices/${deviceId}/action/${action}`, { params }, { timeout: 35000 })
+export const pushSetting = (deviceId, name, data) =>
+  api.post(`/devices/${deviceId}/setting/${name}`, { data }, { timeout: 35000 })
+export const registerDevice = (deviceId, data = {}) =>
+  api.post(`/devices/${deviceId}/register`, data)
