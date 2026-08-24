@@ -173,7 +173,7 @@ services:
       HTTP_PORT: "8102"
       GRPC_PORT: "50052"
       DATABASE_URL: mysql+pymysql://iot_device:device123456@mysql-device:3306/iot_device?charset=utf8mb4
-      REDIS_URL: redis://redis:6379/1
+      REDIS_URL: redis://redis:6379/0
       AUTH_SERVICE_GRPC: auth-service:50051
       MQTT_GATEWAY_GRPC: mqtt-gateway:50054
     ports:
@@ -279,7 +279,7 @@ services:
       MQTT_USERNAME: iot_gateway
       MQTT_PASSWORD: gateway123456
       MQTT_CLIENT_ID: iot-mqtt-gateway
-      REDIS_URL: redis://redis:6379/5
+      REDIS_URL: redis://redis:6379/0
       AUTH_SERVICE_GRPC: auth-service:50051
     ports:
       - "50054:50054"

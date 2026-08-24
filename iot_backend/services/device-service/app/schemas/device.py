@@ -12,6 +12,9 @@ class DeviceBase(BaseModel):
     product_id: str
     device_type: Optional[str] = None
     owner_id: Optional[int] = None
+    group_id: Optional[int] = None
+    gateway_id: Optional[str] = None
+    link_id: Optional[str] = None
 
 
 class DeviceCreate(DeviceBase):
@@ -28,11 +31,15 @@ class DeviceUpdate(BaseModel):
     device_name: Optional[str] = None
     device_type: Optional[str] = None
     owner_id: Optional[int] = None
+    group_id: Optional[int] = None
+    gateway_id: Optional[str] = None
     status: Optional[str] = None
+    disabled: Optional[bool] = None
     firmware_version: Optional[str] = None
     hardware_version: Optional[str] = None
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    geo_code: Optional[str] = None
     device_metadata: Optional[Dict[str, Any]] = None
 
 
@@ -40,6 +47,10 @@ class Device(DeviceBase):
     """设备响应模型"""
     id: int
     status: str
+    disabled: Optional[bool] = False
+    error: Optional[bool] = False
+    error_string: Optional[str] = None
+    values: Optional[Dict[str, Any]] = None
     last_online_at: Optional[datetime] = None
     firmware_version: Optional[str] = None
     hardware_version: Optional[str] = None
@@ -105,3 +116,25 @@ class DeviceListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class DeviceWriteRequest(BaseModel):
+    values: Dict[str, Any]
+
+
+class DeviceReadRequest(BaseModel):
+    points: List[str] = []
+
+
+class DeviceActionRequest(BaseModel):
+    params: Optional[Dict[str, Any]] = None
+
+
+class DeviceSettingRequest(BaseModel):
+    data: Dict[str, Any]
+
+
+class DeviceRegisterRequest(BaseModel):
+    product_id: Optional[str] = None
+    device_name: Optional[str] = None
+    gateway_id: Optional[str] = None

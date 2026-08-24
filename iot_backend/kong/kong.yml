@@ -80,13 +80,34 @@ services:
           - OPTIONS
         strip_path: false
         preserve_host: true
-      - name: device-data-routes
+      - name: products-routes
         paths:
-          - /api/v1/device-data
-        methods:
-          - GET
-          - POST
-          - OPTIONS
+          - /api/v1/products
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+        preserve_host: true
+      - name: alarms-routes
+        paths:
+          - /api/v1/alarms
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+        preserve_host: true
+      - name: groups-routes
+        paths:
+          - /api/v1/groups
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+        preserve_host: true
+      - name: scenes-routes
+        paths:
+          - /api/v1/scenes
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
+        strip_path: false
+        preserve_host: true
+      - name: jobs-routes
+        paths:
+          - /api/v1/jobs
+        methods: [GET, POST, PUT, DELETE, OPTIONS]
         strip_path: false
         preserve_host: true
       - name: device-commands-routes

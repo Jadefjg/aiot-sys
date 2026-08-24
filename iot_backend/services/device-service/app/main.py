@@ -25,6 +25,13 @@ async def lifespan(app: FastAPI):
     # 启动时
     logger.info("Starting Device Service...")
 
+    try:
+        from app.db.init_db import ensure_schema
+        ensure_schema()
+        logger.info("Database schema ready")
+    except Exception as e:
+        logger.error(f"Database schema init failed: {e}")
+
     # 连接gRPC服务
     auth_grpc_client.connect()
     mqtt_grpc_client.connect()
@@ -47,7 +54,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Device Service",
-    description="IoT系统设备服务 - 设备CRUD、设备数据、设备命令",
+    description="IoT设备服务 - 产品物模型、设备生命周期、告警、远程控制",
     version="1.0.0",
     openapi_url="/api/v1/openapi.json",
     docs_url="/docs",

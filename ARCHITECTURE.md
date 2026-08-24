@@ -52,26 +52,39 @@
 ```text
 ┌─────────────────────────────────────────────┐
 │  管理端 Vue（/iot/）                          │
-│  HTTP /api/v1  +  MQTT（经 Broker）           │
-└──────────────────────┬──────────────────────┘
-                       │
-┌──────────────────────▼──────────────────────┐
-│  FastAPI 单体（或 Kong → 微服务）             │
-│  API → Service → CRUD → Models              │
-│  枢纽：mqtt_service / device_runtime /      │
-│        validator_service                    │
+│  HTTP → Kong :8000  /api/v1                  │
 └──────────────────────┬──────────────────────┘
                        │
         ┌──────────────┼──────────────┐
         ▼              ▼              ▼
-     MySQL 8         Redis          EMQX
+   auth-service   device-service  firmware-service
+   :8101/50051    :8102/50052     :8103/50053
+        │              │                │
+        │         gRPC Publish          │
+        │              ▼                │
+        │        mqtt-gateway :50054    │
+        │              │                │
+        └────── Redis 事件总线 (db0) ───┘
+                       │
+                    EMQX :1883
 ```
 
 | 模式 | 说明 |
 |------|------|
 | 单体 | FastAPI `:8000` + Celery + 共享 MySQL / Redis / EMQX |
 | 微服务 | Kong `:8000` → auth / device / firmware；mqtt-gateway 经 gRPC |
-| 总线 | EMQX MQTT；微服务侧另有 Redis Pub/Sub 事件 |
+| 总线 | EMQX MQTT；Redis `device.*` 事件 + `iot:ctrl:resp:{msg_id}` 控制等待 |
+
+**微服务职责（中台能力归属 device-service）：**
+
+| 服务 | 职责 |
+|------|------|
+| auth-service | 登录 JWT、用户/角色/权限；其他服务 gRPC 验票 |
+| device-service | 产品物模型、设备生命周期、告警、分组/场景、远程控制 API |
+| mqtt-gateway | 只做 MQTT 接入：订阅主题、发布 Redis 事件、写入控制响应队列 |
+| firmware-service | 固件与 OTA 任务 |
+
+控制链路：`device-service` HTTP → gRPC `PublishMessage` → MQTT → 设备 `*/response` → Gateway `LPUSH iot:ctrl:resp:{msg_id}` → HTTP `BLPOP` 返回。
 
 ### 后端目录对应
 
@@ -83,6 +96,9 @@
 | Models | `iot_backend/app/db/models/` |
 | Schemas | `iot_backend/app/schemas/` |
 | 路由聚合 | `iot_backend/app/api/v1/api.py` |
+| Device 微服务 | `iot_backend/services/device-service/` |
+| MQTT 网关 | `iot_backend/services/mqtt-gateway/` |
+| Kong | `iot_backend/kong/kong.yml` |
 
 ---
 

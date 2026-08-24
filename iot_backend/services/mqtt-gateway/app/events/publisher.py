@@ -21,11 +21,8 @@ class EventPublisher:
     def connect(self):
         """连接到Redis"""
         try:
-            self.redis_client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                decode_responses=True
+            self.redis_client = redis.Redis.from_url(
+                settings.redis_url, decode_responses=True
             )
             # 测试连接
             self.redis_client.ping()
@@ -112,6 +109,29 @@ class EventPublisher:
         if error:
             event_data["error"] = error
         return self.publish_event(settings.EVENT_CHANNEL_FIRMWARE_STATUS, event_data)
+
+    def publish_lifecycle(self, device_id: str, kind: str, payload: Optional[Dict] = None):
+        """发布设备生命周期事件（register/values/online/location/error）"""
+        event_data = {
+            "event_type": "device_lifecycle",
+            "device_id": device_id,
+            "kind": kind,
+            "payload": payload or {},
+        }
+        return self.publish_event(settings.EVENT_CHANNEL_DEVICE_LIFECYCLE, event_data)
+
+    def push_control_response(self, msg_id: str, payload: Dict[str, Any]) -> bool:
+        """将控制响应写入 Redis 队列，供 device-service 阻塞读取"""
+        if not self.connected or not self.redis_client or not msg_id:
+            return False
+        try:
+            key = f"{settings.CONTROL_RESP_PREFIX}{msg_id}"
+            self.redis_client.lpush(key, json.dumps(payload, ensure_ascii=False))
+            self.redis_client.expire(key, 60)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to push control response {msg_id}: {e}")
+            return False
 
 
 # 全局事件发布器实例

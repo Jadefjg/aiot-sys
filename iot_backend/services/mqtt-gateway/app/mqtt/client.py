@@ -32,13 +32,25 @@ class MQTTClient:
             self.connected_since = datetime.utcnow()
             logger.info("Connected to MQTT broker")
 
-            # 订阅设备相关主题
+            # 订阅设备相关主题（中台生命周期 + 控制响应）
             topics = [
-                ("device/+/data", 1),           # 设备数据上报
-                ("device/+/status", 1),         # 设备状态上报
-                ("device/+/command/response", 1),  # 命令响应
-                ("device/+/heartbeat", 0),      # 设备心跳
-                ("device/+/firmware/status", 1)  # 固件升级状态
+                ("device/+/data", 1),
+                ("device/+/values", 1),
+                ("device/+/property", 1),
+                ("device/+/status", 1),
+                ("device/+/online", 1),
+                ("device/+/offline", 1),
+                ("device/+/register", 1),
+                ("device/+/location", 1),
+                ("device/+/error", 1),
+                ("device/+/heartbeat", 0),
+                ("device/+/command/response", 1),
+                ("device/+/sync/response", 1),
+                ("device/+/read/response", 1),
+                ("device/+/write/response", 1),
+                ("device/+/action/response", 1),
+                ("device/+/setting/response", 1),
+                ("device/+/firmware/status", 1),
             ]
             for topic, qos in topics:
                 client.subscribe(topic, qos)
@@ -68,26 +80,35 @@ class MQTTClient:
 
             device_id = topic_parts[1]
             message_type = topic_parts[2]
+            suffix = topic_parts[3] if len(topic_parts) > 3 else None
 
-            # 更新设备在线状态
             self.device_online_status[device_id] = {
                 "online": True,
                 "last_seen": datetime.utcnow().isoformat()
             }
 
-            # 处理不同类型的消息
-            if message_type == "data":
-                self._handle_device_data(device_id, payload)
-            elif message_type == "status":
-                self._handle_device_status(device_id, payload)
-            elif message_type == "heartbeat":
-                self._handle_device_heartbeat(device_id, payload)
-            elif message_type == "command" and len(topic_parts) > 3 and topic_parts[3] == "response":
-                self._handle_command_response(device_id, payload)
-            elif message_type == "firmware" and len(topic_parts) > 3 and topic_parts[3] == "status":
-                self._handle_firmware_status(device_id, payload)
+            if suffix == "response":
+                self._handle_control_response(device_id, message_type, payload)
+                return
+
+            handlers = {
+                "data": self._handle_device_data,
+                "values": self._handle_device_data,
+                "property": self._handle_device_data,
+                "status": self._handle_device_status,
+                "online": lambda d, _: event_publisher.publish_lifecycle(d, "online"),
+                "offline": lambda d, _: event_publisher.publish_lifecycle(d, "offline"),
+                "register": self._handle_register,
+                "location": self._handle_location,
+                "error": self._handle_error,
+                "heartbeat": self._handle_device_heartbeat,
+                "firmware": self._handle_firmware_status,
+            }
+            handler = handlers.get(message_type)
+            if handler:
+                handler(device_id, payload)
             else:
-                logger.warning(f"Unknown message type: {message_type}")
+                logger.debug(f"Unknown message type: {message_type}")
 
         except Exception as e:
             logger.error(f"Error processing MQTT message: {e}")
@@ -96,13 +117,10 @@ class MQTTClient:
         """处理设备数据上报 - 发布事件到Redis"""
         try:
             data = json.loads(payload)
-            event_publisher.publish_device_data(
-                device_id=device_id,
-                data_type=data.get("type", "telemetry"),
-                data=data.get("data", {}),
-                quality=data.get("quality", "good")
-            )
-            logger.info(f"Published device data event for {device_id}")
+            event_publisher.publish_lifecycle(device_id, "values", {
+                "data": data.get("data", data) if isinstance(data, dict) else {},
+            })
+            logger.info(f"Published device values lifecycle for {device_id}")
         except json.JSONDecodeError:
             logger.error(f"Invalid JSON in device data: {payload}")
         except Exception as e:
@@ -174,6 +192,42 @@ class MQTTClient:
             logger.error(f"Invalid JSON in firmware status: {payload}")
         except Exception as e:
             logger.error(f"Error handling firmware status: {e}")
+
+    def _handle_register(self, device_id: str, payload: str):
+        try:
+            data = json.loads(payload) if payload else {}
+        except json.JSONDecodeError:
+            data = {}
+        event_publisher.publish_lifecycle(device_id, "register", data)
+
+    def _handle_location(self, device_id: str, payload: str):
+        try:
+            data = json.loads(payload) if payload else {}
+        except json.JSONDecodeError:
+            return
+        event_publisher.publish_lifecycle(device_id, "location", data)
+
+    def _handle_error(self, device_id: str, payload: str):
+        try:
+            data = json.loads(payload) if payload else {"error": payload}
+        except json.JSONDecodeError:
+            data = {"error": payload}
+        event_publisher.publish_lifecycle(device_id, "error", data)
+
+    def _handle_control_response(self, device_id: str, message_type: str, payload: str):
+        """控制响应：写入 Redis 队列，并兼容旧 command_id 事件"""
+        try:
+            data = json.loads(payload) if payload else {}
+        except json.JSONDecodeError:
+            logger.error(f"Invalid JSON in control response: {payload}")
+            return
+        data.setdefault("device_id", device_id)
+        data.setdefault("action", message_type)
+        msg_id = data.get("msg_id")
+        if msg_id:
+            event_publisher.push_control_response(msg_id, data)
+        if message_type == "command":
+            self._handle_command_response(device_id, payload)
 
     def start(self):
         """启动MQTT客户端"""

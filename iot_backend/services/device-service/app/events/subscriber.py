@@ -10,6 +10,8 @@ from app.core.config import settings
 from app.db.session import SessionLocal
 from app.crud.device import device_crud, device_data_crud, device_command_crud
 from app.schemas.device import DeviceDataCreate
+from app.services.device_runtime_service import device_runtime
+from app.grpc.clients.mqtt_client import mqtt_grpc_client
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +28,8 @@ class EventSubscriber:
     def connect(self):
         """连接到Redis"""
         try:
-            self.redis_client = redis.Redis(
-                host=settings.REDIS_HOST,
-                port=settings.REDIS_PORT,
-                db=settings.REDIS_DB,
-                decode_responses=True
+            self.redis_client = redis.Redis.from_url(
+                settings.redis_url, decode_responses=True
             )
             self.redis_client.ping()
             self.pubsub = self.redis_client.pubsub()
@@ -56,12 +55,13 @@ class EventSubscriber:
             logger.error("Redis not connected")
             return
 
-        # 订阅事件通道
+    # 订阅事件通道
         channels = [
             settings.EVENT_CHANNEL_DEVICE_DATA,
             settings.EVENT_CHANNEL_DEVICE_STATUS,
             settings.EVENT_CHANNEL_DEVICE_HEARTBEAT,
-            settings.EVENT_CHANNEL_COMMAND_RESPONSE
+            settings.EVENT_CHANNEL_COMMAND_RESPONSE,
+            settings.EVENT_CHANNEL_DEVICE_LIFECYCLE,
         ]
         self.pubsub.subscribe(**{channel: self._handle_message for channel in channels})
 
@@ -100,6 +100,8 @@ class EventSubscriber:
                 self._handle_device_heartbeat(data)
             elif event_type == 'command_response':
                 self._handle_command_response(data)
+            elif event_type == 'device_lifecycle':
+                self._handle_lifecycle(data)
             else:
                 logger.warning(f"Unknown event type: {event_type}")
 
@@ -189,6 +191,47 @@ class EventSubscriber:
                 logger.info(f"Updated command {command_id} status: {status}")
         except Exception as e:
             logger.error(f"Error updating command status: {e}")
+        finally:
+            db.close()
+
+    def _publish_alarm(self, device_id: str, alarm: dict):
+        mqtt_grpc_client.publish_message(
+            f"device/{device_id}/alarm", json.dumps(alarm, ensure_ascii=False)
+        )
+
+    def _handle_lifecycle(self, data: dict):
+        """处理注册/属性/定位/故障等生命周期事件"""
+        device_id = data.get("device_id")
+        kind = data.get("kind")
+        payload = data.get("payload") or {}
+        if not device_id or not kind:
+            return
+        db = SessionLocal()
+        try:
+            if kind in ("values", "property", "data"):
+                values = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+                if isinstance(values, dict):
+                    device_runtime.put_values(db, device_id, values, self._publish_alarm)
+            elif kind == "register":
+                device_runtime.register(
+                    db, device_id,
+                    product_id=payload.get("product_id"),
+                    device_name=payload.get("device_name"),
+                    gateway_id=payload.get("gateway_id"),
+                )
+            elif kind in ("online", "offline"):
+                device_runtime.set_online(db, device_id, kind == "online")
+            elif kind == "location":
+                lat, lng = payload.get("latitude"), payload.get("longitude")
+                if lat is not None and lng is not None:
+                    device_runtime.set_location(
+                        db, device_id, float(lat), float(lng), payload.get("geo_code")
+                    )
+            elif kind == "error":
+                msg = payload.get("error") or payload.get("message") or ""
+                device_runtime.set_error(db, device_id, str(msg))
+        except Exception as e:
+            logger.error(f"Error handling lifecycle {kind}: {e}")
         finally:
             db.close()
 
