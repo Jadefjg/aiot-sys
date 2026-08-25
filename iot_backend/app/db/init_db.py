@@ -27,8 +27,46 @@ def ensure_schema():
     _ensure_device_columns()
     _ensure_script_columns()
     _ensure_indexes()
+    _ensure_firmware_version_constraint()
     _ensure_permissions()
     _ensure_default_product()
+
+
+def _ensure_firmware_version_constraint():
+    """将 firmware.version 全局唯一改为 (version, product_id) 组合唯一"""
+    inspector = inspect(engine)
+    if "firmware" not in inspector.get_table_names():
+        return
+    indexes = inspector.get_indexes("firmware")
+    uniques = {ix["name"]: ix for ix in indexes if ix.get("unique")}
+    # MySQL 常把 UNIQUE 列建为 version 单列索引
+    with engine.begin() as conn:
+        for name, ix in list(uniques.items()):
+            cols = ix.get("column_names") or []
+            if cols == ["version"] and name != "uq_firmware_version_product":
+                try:
+                    conn.execute(text(f"ALTER TABLE firmware DROP INDEX `{name}`"))
+                    logger.info("Dropped global unique index %s on firmware.version", name)
+                except Exception as exc:
+                    logger.warning("Skip drop firmware index %s: %s", name, exc)
+        existing = {ix["name"] for ix in inspector.get_indexes("firmware")}
+        # 重新检查（DROP 后）
+        try:
+            inspector = inspect(engine)
+            existing = {ix["name"] for ix in inspector.get_indexes("firmware")}
+        except Exception:
+            pass
+        if "uq_firmware_version_product" not in existing:
+            try:
+                conn.execute(
+                    text(
+                        "ALTER TABLE firmware ADD UNIQUE KEY "
+                        "`uq_firmware_version_product` (`version`, `product_id`)"
+                    )
+                )
+                logger.info("Created unique key uq_firmware_version_product")
+            except Exception as exc:
+                logger.warning("Skip uq_firmware_version_product: %s", exc)
 
 
 def _ensure_device_columns():

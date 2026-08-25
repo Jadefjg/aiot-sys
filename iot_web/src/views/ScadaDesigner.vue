@@ -73,6 +73,7 @@ const productId = ref('')
 const product = ref(null)
 const dragType = ref('')
 const selectedId = ref('')
+const route = useRoute()
 const layout = reactive({ width: 960, height: 560, widgets: [] })
 let moving = null
 
@@ -156,8 +157,8 @@ onMounted(async () => {
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('mouseup', onMouseUp)
   products.value = await getProducts().catch(() => [])
-  const q = useRoute().query.productId
-  productId.value = q || products.value[0]?.product_id || ''
+  const q = route.query.productId
+  productId.value = (Array.isArray(q) ? q[0] : q) || products.value[0]?.product_id || ''
   if (productId.value) await load()
 })
 onUnmounted(() => {

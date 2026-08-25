@@ -13,13 +13,22 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str
     full_name: Optional[str] = None
+    is_active: Optional[bool] = True
     is_superuser: Optional[bool] = False
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
+    username: Optional[str] = None
+    email: Optional[EmailStr] = None
     password: Optional[str] = None
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
+    is_superuser: Optional[bool] = None
+
+
+class UserRolesAssign(BaseModel):
+    """批量分配用户角色"""
+    role_ids: List[int] = []
 
 
 class UserInDBBase(UserBase):

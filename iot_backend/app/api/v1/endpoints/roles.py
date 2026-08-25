@@ -163,6 +163,8 @@ def assign_permission_to_role(
     role = role_crud.get(db, id=role_id)
     if not role:
         raise HTTPException(status_code=404, detail="角色不存在")
+    if not permission_crud.get(db, permission_id=permission_id):
+        raise HTTPException(status_code=404, detail="Permission not found")
     role_crud.assign_permission(db, role_id=role_id, permission_id=permission_id)
     return {"message": "权限分配成功"}
 

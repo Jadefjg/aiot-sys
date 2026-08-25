@@ -66,12 +66,18 @@ def register_device(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """设备注册/自动建档"""
+    """设备注册/自动建档（需产品或设备 operator 权限）"""
     body = body or DeviceRegisterRequest()
+    product_id = body.product_id or "default"
+    existing = device_crud.get_by_device_id(db, device_id)
+    if existing:
+        access.ensure_device(db, current_user, existing, "operator")
+    else:
+        access.ensure_product(db, current_user, product_id, "operator")
     return device_runtime.register(
         db,
         device_id,
-        product_id=body.product_id,
+        product_id=product_id,
         device_name=body.device_name,
         gateway_id=body.gateway_id,
     )

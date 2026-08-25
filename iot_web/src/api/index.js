@@ -37,11 +37,31 @@ api.interceptors.request.use(
 )
 
 const isAuthLogin = (config) => (config?.url || '').includes('/auth/login')
+const RETRY_STATUS = [502, 503, 504]
+const MAX_GET_RETRIES = 4
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 api.interceptors.response.use(
   response => response.data,
-  error => {
+  async (error) => {
     const { response, config } = error
+    const method = (config?.method || 'get').toLowerCase()
+
+    if (
+      config
+      && !config.__skipRetry
+      && method === 'get'
+      && RETRY_STATUS.includes(response?.status)
+    ) {
+      config.__retryCount = config.__retryCount || 0
+      if (config.__retryCount < MAX_GET_RETRIES) {
+        config.__retryCount += 1
+        await sleep(1000 * config.__retryCount)
+        return api(config)
+      }
+    }
+
     if (config?.skipErrorToast) {
       return Promise.reject(error)
     }
@@ -61,6 +81,9 @@ api.interceptors.response.use(
           break
         case 404:
           ElMessage.error(detail === '请求失败' ? '请求的资源不存在' : detail)
+          break
+        case 502:
+          ElMessage.error('后端服务暂不可用，请稍后重试')
           break
         case 504:
           ElMessage.error(detail === '请求失败' ? '设备响应超时' : detail)

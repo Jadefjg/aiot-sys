@@ -143,7 +143,7 @@ const activeMenu = computed(() => {
 })
 
 onMounted(() => {
-  if (authStore.token && !authStore.user) authStore.fetchUser()
+  if (authStore.token) authStore.fetchUser()
 })
 
 const handleCommand = (command) => {

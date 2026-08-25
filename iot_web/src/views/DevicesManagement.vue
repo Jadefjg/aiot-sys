@@ -122,9 +122,6 @@
         <el-form-item label="从站地址">
           <el-input-number v-model="deviceForm.slave" :min="1" :max="247" />
         </el-form-item>
-        <el-form-item label="设备密钥" prop="device_secret" v-if="!isEditing">
-          <el-input v-model="deviceForm.device_secret" placeholder="请输入设备密钥" />
-        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="deviceDialogVisible = false">取消</el-button>
@@ -201,7 +198,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/store/modules/auth'
-import { getDevices, createDevice, updateDevice, deleteDevice, sendCommand, exportDevices, importDevices } from '@/api/modules/devices'
+import { getDevices, createDevice, updateDevice, deleteDevice, controlDevice, exportDevices, importDevices } from '@/api/modules/devices'
 import { getFirmwares, createUpgradeTask } from '@/api/modules/firmware'
 import { getProducts } from '@/api/modules/products'
 
@@ -243,8 +240,7 @@ const deviceForm = reactive({
   product_id: '',
   gateway_id: '',
   link_id: '',
-  slave: 1,
-  device_secret: ''
+  slave: 1
 })
 
 const deviceRules = {
@@ -311,8 +307,7 @@ const showAddDialog = () => {
     product_id: '',
     gateway_id: '',
     link_id: '',
-    slave: 1,
-    device_secret: ''
+    slave: 1
   })
   deviceDialogVisible.value = true
 }
@@ -327,8 +322,7 @@ const showEditDialog = (device) => {
     product_id: device.product_id,
     gateway_id: device.gateway_id || '',
     link_id: device.link_id || '',
-    slave: device.device_metadata?.slave || 1,
-    device_secret: ''
+    slave: device.device_metadata?.slave || 1
   })
   deviceDialogVisible.value = true
 }
@@ -408,7 +402,7 @@ const handleSendCommand = async () => {
   try {
     const command = JSON.parse(commandJson.value)
     controlLoading.value = true
-    await sendCommand(selectedDevice.value.device_id, command)
+    await controlDevice(selectedDevice.value.device_id, command)
     ElMessage.success('命令发送成功')
     controlDialogVisible.value = false
   } catch (error) {

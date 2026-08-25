@@ -27,6 +27,8 @@ class DeviceImportItem(BaseModel):
     product_id: str
     gateway_id: Optional[str] = None
     group_id: Optional[int] = None
+    link_id: Optional[str] = None
+    device_metadata: Optional[Dict[str, Any]] = None
 
 
 class DeviceImportBody(BaseModel):
@@ -64,8 +66,9 @@ def create_device(
         raise HTTPException(status_code=400, detail="设备ID已存在")
 
     product = product_crud.get_by_product_id(db, device_in.product_id)
-    if product:
-        access.ensure_product(db, current_user, device_in.product_id, "operator")
+    if not product:
+        raise HTTPException(status_code=400, detail="产品不存在，请先创建产品")
+    access.ensure_product(db, current_user, device_in.product_id, "operator")
     if not current_user.is_superuser and not device_in.owner_id:
         device_in.owner_id = current_user.id
 
@@ -101,6 +104,8 @@ def export_devices(
             "product_id": d.product_id,
             "gateway_id": d.gateway_id,
             "group_id": d.group_id,
+            "link_id": d.link_id,
+            "device_metadata": d.device_metadata,
             "status": d.status,
             "latitude": d.latitude,
             "longitude": d.longitude,
@@ -118,20 +123,31 @@ def import_devices(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """批量导入设备"""
-    created, skipped = [], []
+    created, skipped, errors = [], [], []
     for item in body.devices:
         if device_crud.get_by_device_id(db, device_id=item.device_id):
             skipped.append(item.device_id)
             continue
+        product = product_crud.get_by_product_id(db, item.product_id)
+        if not product:
+            errors.append({"device_id": item.device_id, "detail": "产品不存在"})
+            continue
+        try:
+            access.ensure_product(db, current_user, item.product_id, "operator")
+        except HTTPException as exc:
+            errors.append({"device_id": item.device_id, "detail": exc.detail})
+            continue
         obj = DeviceCreate(**item.model_dump())
-        product = product_crud.get_by_product_id(db, obj.product_id)
-        if product:
-            access.ensure_product(db, current_user, obj.product_id, "operator")
         if not current_user.is_superuser and not obj.owner_id:
             obj.owner_id = current_user.id
         device_crud.create(db, obj)
         created.append(item.device_id)
-    return {"created": created, "skipped": skipped, "created_count": len(created)}
+    return {
+        "created": created,
+        "skipped": skipped,
+        "errors": errors,
+        "created_count": len(created),
+    }
 
 
 @router.get("/{device_id}", response_model=Device)
@@ -155,6 +171,12 @@ def update_device(
 ) -> Any:
     """更新设备信息"""
     device = access.load_device(db, current_user, device_id, "operator")
+    update_data = device_in.model_dump(exclude_unset=True)
+    # 仅超管或设备 admin 可变更 owner_id，防止 operator 提权
+    if "owner_id" in update_data:
+        role = access.device_role(db, current_user, device)
+        if not current_user.is_superuser and role != "admin":
+            raise HTTPException(status_code=403, detail="无权变更设备所有者")
     device = device_crud.update(db, db_obj=device, obj_in=device_in)
     return device
 
@@ -189,9 +211,10 @@ def create_device_data(
     from datetime import datetime
     from app.services.timeseries import timeseries
     if timeseries.enabled:
+        device = device_crud.get_by_device_id(db, device_id)
         return {
             "id": 0,
-            "device_id": 0,
+            "device_id": device.id if device else 0,
             "timestamp": datetime.utcnow(),
             "data_type": data_in.data_type,
             "data": data_in.data,
@@ -307,10 +330,12 @@ def send_device_command(
         mqtt_client.publish(topic=topic, payload=json.dumps(payload))
 
         # 更新命令状态为已发送
-        device_command_crud.update_status(db, command.id, "sent")
+        command = device_command_crud.update_status(db, command.id, "sent") or command
     except Exception as e:
         # 如果发送失败，更新状态
-        device_command_crud.update_status(db, command.id, "failed", {"error": str(e)})
+        command = device_command_crud.update_status(
+            db, command.id, "failed", {"error": str(e)}
+        ) or command
         raise HTTPException(status_code=500, detail=f"发送命令失败: {str(e)}")
 
     return command

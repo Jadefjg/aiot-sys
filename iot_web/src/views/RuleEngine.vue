@@ -54,6 +54,12 @@
         <el-form-item v-if="form.actionType === 'mqtt'" label="主题">
           <el-input v-model="form.topic" />
         </el-form-item>
+        <el-form-item v-if="form.actionType === 'write'" label="目标设备">
+          <el-input v-model="form.write_device" placeholder="可空=触发设备" />
+        </el-form-item>
+        <el-form-item v-if="form.actionType === 'write'" label="写入JSON">
+          <el-input v-model="form.write_values" type="textarea" :rows="2" placeholder='{"switch": true}' />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="visible = false">取消</el-button>
@@ -70,46 +76,72 @@ import { useAuthStore } from '@/store/modules/auth'
 import { getRules, createRule, updateRule, deleteRule } from '@/api/modules/channels'
 
 const authStore = useAuthStore()
-const canWrite = computed(() => authStore.isSuperuser)
+const canWrite = computed(() => authStore.hasPermission('rule:write'))
 
 const loading = ref(false)
 const rules = ref([])
 const visible = ref(false)
 const form = reactive({
   name: '', product_id: '', field: 'temperature', operator: '>', value: '30',
-  actionType: 'alarm', url: '', topic: ''
+  actionType: 'alarm', url: '', topic: '', write_device: '', write_values: '{"switch": true}'
 })
 
 const load = async () => {
   loading.value = true
-  try { rules.value = await getRules() } finally { loading.value = false }
+  try {
+    rules.value = await getRules()
+  } catch {
+    rules.value = []
+  } finally {
+    loading.value = false
+  }
 }
 
 const openCreate = () => {
   Object.assign(form, {
     name: '', product_id: '', field: 'temperature', operator: '>', value: '30',
-    actionType: 'alarm', url: '', topic: ''
+    actionType: 'alarm', url: '', topic: '', write_device: '', write_values: '{"switch": true}'
   })
   visible.value = true
 }
 
+const parseJson = (text, fallback = {}) => {
+  try { return JSON.parse(text || '{}') } catch { return fallback }
+}
+
 const save = async () => {
+  if (!form.name?.trim() || !form.field?.trim()) {
+    ElMessage.warning('请填写规则名称与字段')
+    return
+  }
   const num = Number(form.value)
   const action = { type: form.actionType }
   if (form.url) action.url = form.url
   if (form.topic) action.topic = form.topic
-  await createRule({
-    name: form.name,
-    product_id: form.product_id || null,
-    field: form.field,
-    operator: form.operator,
-    value: Number.isNaN(num) ? form.value : num,
-    enabled: true,
-    actions: [action]
-  })
-  ElMessage.success('规则已创建')
-  visible.value = false
-  load()
+  if (form.actionType === 'write') {
+    action.device_id = form.write_device || null
+    action.values = parseJson(form.write_values, {})
+    if (!Object.keys(action.values).length) {
+      ElMessage.warning('写设备动作需要填写写入JSON')
+      return
+    }
+  }
+  try {
+    await createRule({
+      name: form.name,
+      product_id: form.product_id || null,
+      field: form.field,
+      operator: form.operator,
+      value: Number.isNaN(num) ? form.value : num,
+      enabled: true,
+      actions: [action]
+    })
+    ElMessage.success('规则已创建')
+    visible.value = false
+    load()
+  } catch {
+    /* 全局拦截器已提示 */
+  }
 }
 
 const toggle = async (row, enabled) => { await updateRule(row.id, { enabled }); load() }

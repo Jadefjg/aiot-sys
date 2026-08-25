@@ -36,7 +36,7 @@ class CRUDUser:
             email=obj_in.email,
             hashed_password=hashed_password,
             full_name=obj_in.full_name,
-            is_supperuser=obj_in.is_superuser
+            is_superuser=obj_in.is_superuser
         )
         db.add(db_obj)
         db.commit()
@@ -81,7 +81,7 @@ class CRUDUser:
 
     def is_superuser(self, user: User) -> bool:
         """检查用户是否为超级用户"""
-        return user.is_supperuser
+        return user.is_superuser
 
     def assign_role(self, db: Session, user_id: int, role_id: int) -> Optional[UserRole]:
         """为用户分配角色"""
@@ -125,7 +125,7 @@ class CRUDUser:
         """检查用户是否有特定权限"""
         # 先检查是否为超级用户
         user = self.get(db, user_id)
-        if user and user.is_supperuser:
+        if user and user.is_superuser:
             return True
 
         permission = db.query(Permission).join(RolePermission).join(Role).join(UserRole).filter(

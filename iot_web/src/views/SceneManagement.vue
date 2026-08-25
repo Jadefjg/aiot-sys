@@ -164,6 +164,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useAuthStore } from '@/store/modules/auth'
 import {
   getScenes, createScene, updateScene, deleteScene,
   getJobs, createJob, updateJob, deleteJob,
@@ -172,6 +173,7 @@ import {
 } from '@/api/modules/scenes'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const gatewayFilter = ref(route.query.gateway_id || '')
 const tab = ref('scenes')
 const loading = ref(false)
@@ -200,12 +202,18 @@ const gwParams = () => (gatewayFilter.value ? { gateway_id: gatewayFilter.value 
 
 const load = async () => {
   loading.value = true
+  const params = gwParams()
   try {
-    const params = gwParams()
-    scenes.value = await getScenes(params)
-    jobs.value = await getJobs(params)
-    bindings.value = await getBindings(params)
-    scripts.value = await getScripts(params)
+    const [sceneRes, jobRes, bindingRes, scriptRes] = await Promise.allSettled([
+      getScenes(params),
+      getJobs(params),
+      getBindings(params),
+      getScripts(params)
+    ])
+    scenes.value = sceneRes.status === 'fulfilled' ? sceneRes.value : []
+    jobs.value = jobRes.status === 'fulfilled' ? jobRes.value : []
+    bindings.value = bindingRes.status === 'fulfilled' ? bindingRes.value : []
+    scripts.value = scriptRes.status === 'fulfilled' ? scriptRes.value : []
   } finally {
     loading.value = false
   }
@@ -261,24 +269,40 @@ const saveScene = async () => {
 }
 
 const saveJob = async () => {
-  await createJob({
-    name: jobForm.name,
-    cron_time: jobForm.cron_time,
-    gateway_id: jobForm.gateway_id || null,
-    enabled: true,
-    action: { type: 'write', device_id: jobForm.device_id },
-    data: parseJson(jobForm.data_json)
-  })
-  ElMessage.success('任务已创建')
-  jobVisible.value = false
-  load()
+  if (!jobForm.name?.trim() || !jobForm.device_id?.trim()) {
+    ElMessage.warning('请填写任务名称与目标设备')
+    return
+  }
+  if (!authStore.isSuperuser && !jobForm.gateway_id) {
+    ElMessage.warning('非管理员请填写网关ID')
+    return
+  }
+  try {
+    await createJob({
+      name: jobForm.name,
+      cron_time: jobForm.cron_time,
+      gateway_id: jobForm.gateway_id || null,
+      enabled: true,
+      action: { type: 'write', device_id: jobForm.device_id },
+      data: parseJson(jobForm.data_json)
+    })
+    ElMessage.success('任务已创建')
+    jobVisible.value = false
+    load()
+  } catch { /* 全局提示 */ }
 }
 
 const saveBinding = async () => {
-  await createBinding({ ...bindingForm, gateway_id: bindingForm.gateway_id || null })
-  ElMessage.success('联动已创建')
-  bindingVisible.value = false
-  load()
+  if (!bindingForm.device1_id || !bindingForm.device2_id) {
+    ElMessage.warning('请填写设备 A / B')
+    return
+  }
+  try {
+    await createBinding({ ...bindingForm, gateway_id: bindingForm.gateway_id || null })
+    ElMessage.success('联动已创建')
+    bindingVisible.value = false
+    load()
+  } catch { /* 全局提示 */ }
 }
 
 const preview = async () => {
@@ -292,12 +316,22 @@ const preview = async () => {
 }
 
 const saveScript = async () => {
-  const payload = { ...scriptForm, gateway_id: scriptForm.gateway_id || null }
-  if (scriptForm.id) await updateScript(scriptForm.id, payload)
-  else await createScript(payload)
-  ElMessage.success('脚本已保存，属性上报或按间隔在云端执行')
-  scriptVisible.value = false
-  load()
+  if (!scriptForm.name?.trim() || !scriptForm.content?.trim()) {
+    ElMessage.warning('请填写脚本名称与内容')
+    return
+  }
+  if (!authStore.isSuperuser && !scriptForm.gateway_id) {
+    ElMessage.warning('非管理员请填写网关ID')
+    return
+  }
+  try {
+    const payload = { ...scriptForm, gateway_id: scriptForm.gateway_id || null }
+    if (scriptForm.id) await updateScript(scriptForm.id, payload)
+    else await createScript(payload)
+    ElMessage.success('脚本已保存，属性上报或按间隔在云端执行')
+    scriptVisible.value = false
+    load()
+  } catch { /* 全局提示 */ }
 }
 
 const toggleScene = async (row, enabled) => { await updateScene(row.id, { enabled }); load() }

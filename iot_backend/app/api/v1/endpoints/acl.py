@@ -35,8 +35,9 @@ def user_options(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """授权下拉：仅 id / 用户名"""
-    _ = current_user
+    """授权下拉：仅超管或具备 admin ACL 的用户可枚举"""
+    if not access.can_enumerate_users(db, current_user):
+        raise HTTPException(status_code=403, detail="权限不足")
     users = user_crud.get_multi(db, skip=0, limit=500)
     return [UserOption(id=u.id, username=u.username) for u in users]
 

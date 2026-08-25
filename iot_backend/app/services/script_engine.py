@@ -334,7 +334,11 @@ class ScriptEngine:
         return host
 
     def _apply(self, host: ScriptHost) -> None:
-        if not host.writes:
+        self.apply_writes(host.writes)
+
+    def apply_writes(self, writes) -> None:
+        """将脚本 write 结果落到设备（供 ACL 校验后再调用）"""
+        if not writes:
             return
         from app.db.session import SessionLocal
         from app.crud.device import device_crud
@@ -344,7 +348,15 @@ class ScriptEngine:
 
         db = SessionLocal()
         try:
-            for device_id, values in host.writes:
+            for item in writes:
+                if isinstance(item, (list, tuple)):
+                    device_id, values = item[0], item[1]
+                elif isinstance(item, dict):
+                    device_id, values = item.get("device_id"), item.get("values") or {}
+                else:
+                    continue
+                if not device_id or not values:
+                    continue
                 device_runtime.put_values(db, device_id, values, publish_alarm=mqtt_client._publish_alarm)
                 if device_crud.get_by_device_id(db, device_id):
                     mqtt_client.publish(

@@ -131,10 +131,15 @@ class CRUDFirmwareUpgradeTask:
 
     def get_multi(
         self, db: Session, skip: int = 0, limit: int = 100,
-        device_id: Optional[int] = None, status: Optional[str] = None
+        device_id: Optional[int] = None, status: Optional[str] = None,
+        device_ids: Optional[List[int]] = None,
     ) -> List[FirmwareUpgradeTask]:
         """获取升级任务列表"""
         query = db.query(FirmwareUpgradeTask)
+        if device_ids is not None:
+            if not list(device_ids):
+                return []
+            query = query.filter(FirmwareUpgradeTask.device_id.in_(list(device_ids)))
         if device_id:
             query = query.filter(FirmwareUpgradeTask.device_id == device_id)
         if status:

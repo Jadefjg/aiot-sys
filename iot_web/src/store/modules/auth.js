@@ -13,6 +13,7 @@ export const useAuthStore = defineStore('auth', {
   state: () => ({
     token: localStorage.getItem('token') || null,
     user: readCachedUser(),
+    permissions: [],
     loading: false,
     access: { is_superuser: false, products: {}, devices: {} }
   }),
@@ -20,6 +21,8 @@ export const useAuthStore = defineStore('auth', {
   getters: {
     isLoggedIn: (state) => !!state.token,
     isSuperuser: (state) => state.user?.is_superuser || false,
+    hasPermission: (state) => (code) =>
+      state.user?.is_superuser || state.permissions.includes('*') || state.permissions.includes(code),
     username: (state) => state.user?.username || '',
     productRole: (state) => (productId) => {
       if (state.user?.is_superuser) return 'admin'
@@ -55,7 +58,10 @@ export const useAuthStore = defineStore('auth', {
     async fetchUser() {
       if (!this.token) return
       try {
-        this.user = await getCurrentUser()
+        const { getMyPermissions } = await import('@/api/modules/users')
+        const [user, permRes] = await Promise.all([getCurrentUser(), getMyPermissions()])
+        this.user = user
+        this.permissions = permRes?.permissions || []
         localStorage.setItem('user', JSON.stringify(this.user))
         await this.fetchAccess()
       } catch (error) {
@@ -77,6 +83,7 @@ export const useAuthStore = defineStore('auth', {
     logout() {
       this.token = null
       this.user = null
+      this.permissions = []
       this.access = { is_superuser: false, products: {}, devices: {} }
       localStorage.removeItem('token')
       localStorage.removeItem('user')

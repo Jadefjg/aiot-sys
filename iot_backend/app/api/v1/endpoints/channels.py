@@ -9,6 +9,7 @@ from app.crud.channel import channel_crud
 from app.db.session import get_db
 from app.schemas.channel import Channel, ChannelCreate, ChannelIngest, ChannelLog, ChannelUpdate
 from app.schemas.user import User
+from app.services import access_control as access
 from app.services.channel_runtime import channel_runtime
 from app.services.device_runtime_service import device_runtime
 from app.services.mqtt_service import mqtt_client
@@ -136,6 +137,7 @@ def ingest_http(
         payload["raw"] = body.raw
     if not payload:
         raise HTTPException(status_code=400, detail="values 或 raw 至少提供一项")
+    access.load_device(db, current_user, body.device_id, "operator")
     device = device_runtime.put_values(
         db, body.device_id, payload, publish_alarm=mqtt_client._publish_alarm
     )

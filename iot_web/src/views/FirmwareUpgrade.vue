@@ -97,7 +97,7 @@
           <template #default="{ row }">
             <el-progress
               :percentage="row.progress || 0"
-              :status="row.status === 'completed' ? 'success' : row.status === 'failed' ? 'exception' : ''"
+              :status="['completed','success'].includes(row.status) ? 'success' : row.status === 'failed' ? 'exception' : ''"
             />
           </template>
         </el-table-column>
@@ -261,6 +261,7 @@ const getStatusType = (status) => {
     pending: 'warning',
     in_progress: 'primary',
     completed: 'success',
+    success: 'success',
     failed: 'danger',
     cancelled: 'info'
   }
@@ -273,6 +274,7 @@ const getStatusText = (status) => {
     pending: '等待中',
     in_progress: '进行中',
     completed: '已完成',
+    success: '已完成',
     failed: '失败',
     cancelled: '已取消'
   }

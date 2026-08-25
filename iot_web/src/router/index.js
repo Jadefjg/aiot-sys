@@ -172,7 +172,7 @@ router.beforeEach(async (to, from, next) => {
   }
   if (to.meta.requiresSuperuser) {
     const authStore = useAuthStore()
-    if (authStore.token && !authStore.user) {
+    if (authStore.token) {
       await authStore.fetchUser()
     }
     if (!authStore.isSuperuser) {

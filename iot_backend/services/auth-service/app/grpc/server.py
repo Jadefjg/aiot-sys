@@ -73,7 +73,7 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
                 )
 
             # 超级用户拥有所有权限
-            if user.is_supperuser:
+            if user.is_superuser:
                 return CheckPermissionResponse(
                     allowed=True,
                     reason="超级用户"
@@ -119,7 +119,7 @@ class AuthServicer(auth_pb2_grpc.AuthServiceServicer):
                 email=user.email or "",
                 full_name=user.full_name or "",
                 is_active=user.is_active,
-                is_superuser=user.is_supperuser,
+                is_superuser=user.is_superuser,
                 created_at=user.created_at.isoformat() if user.created_at else "",
                 roles=role_infos
             )

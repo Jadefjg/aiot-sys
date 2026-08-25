@@ -140,7 +140,7 @@ const openCreate = (kind) => {
   Object.assign(form, {
     channel_id: `ch-${Date.now().toString().slice(-6)}`,
     name: kind === 'collect' ? '采集通道' : '资源通道',
-    kind, protocol: kind === 'collect' ? 'mqtt' : 'mysql',
+    kind, protocol: kind === 'collect' ? 'mqtt' : 'influx',
     link_id: '', port: '9000', device_id: '', host: '', endpoint: '',
     simulate: true, pointsJson: '[{"name":"temperature","node":"ns=2;s=Temp","ioa":1,"db":1,"offset":0}]',
     url: '', topic: '', description: ''

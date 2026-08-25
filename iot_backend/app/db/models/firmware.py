@@ -1,4 +1,6 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, BigInteger
+from sqlalchemy import (
+    Column, Integer, String, DateTime, ForeignKey, Text, Boolean, BigInteger, UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -9,8 +11,8 @@ class Firmware(Base):
     __tablename__ = "firmware"
 
     id = Column(Integer, primary_key=True, index=True)
-    version = Column(String(50), unique=True, nullable=False)
-    product_id = Column(String(100), nullable=False)  # 适用于哪个产品线
+    version = Column(String(50), nullable=False, index=True)
+    product_id = Column(String(100), nullable=False, index=True)  # 适用于哪个产品线
     file_name = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)
     file_url = Column(String(500), nullable=False)  # 固件文件下载URL
@@ -28,8 +30,9 @@ class Firmware(Base):
     creator = relationship("User", foreign_keys=[create_by])
     upgrade_tasks = relationship("FirmwareUpgradeTask", back_populates="firmware")
 
-    # 唯一约束
+    # 同一产品内版本唯一（非全局）
     __table_args__ = (
+        UniqueConstraint("version", "product_id", name="uq_firmware_version_product"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
 

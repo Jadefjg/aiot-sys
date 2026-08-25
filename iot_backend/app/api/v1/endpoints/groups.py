@@ -19,10 +19,42 @@ from app.schemas.group import (
     SceneUpdate,
 )
 from app.schemas.user import User
+from app.services import access_control as access
 
 router = APIRouter()
 scenes_router = APIRouter()
 jobs_router = APIRouter()
+
+
+def _ensure_scene_write(db: Session, user: User, scene_like) -> None:
+    gateway_id = getattr(scene_like, "gateway_id", None)
+    device_ids = access.collect_scene_device_ids(scene_like)
+    if gateway_id:
+        access.ensure_gateway(db, user, gateway_id, "operator")
+    elif not device_ids:
+        access.ensure_gateway(db, user, None, "operator")
+    access.ensure_devices(db, user, device_ids, "operator")
+
+
+def _ensure_scene_manage(db: Session, user: User, scene) -> None:
+    """更新/删除：有网关按网关；无网关则按触发/动作设备或超管"""
+    if user.is_superuser:
+        return
+    if scene.gateway_id:
+        access.ensure_gateway(db, user, scene.gateway_id, "operator")
+        return
+    device_ids = access.collect_scene_device_ids(scene)
+    if not device_ids:
+        raise HTTPException(status_code=403, detail="全局场景仅超级管理员可操作")
+    access.ensure_devices(db, user, device_ids, "operator")
+
+
+def _ensure_job_write(db: Session, user: User, job_like) -> None:
+    gateway_id = getattr(job_like, "gateway_id", None)
+    access.ensure_gateway(db, user, gateway_id, "operator")
+    action = getattr(job_like, "action", None) or {}
+    if isinstance(action, dict) and action.get("device_id"):
+        access.ensure_devices(db, user, [action["device_id"]], "operator")
 
 
 @router.get("/", response_model=List[DeviceGroup])
@@ -41,6 +73,8 @@ def create_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="权限不足，需要超级管理员权限")
     return group_crud.create(db, group_in)
 
 
@@ -51,6 +85,8 @@ def update_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="权限不足，需要超级管理员权限")
     group = group_crud.get(db, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="分组不存在")
@@ -63,6 +99,8 @@ def delete_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="权限不足，需要超级管理员权限")
     group = group_crud.delete(db, group_id)
     if not group:
         raise HTTPException(status_code=404, detail="分组不存在")
@@ -77,7 +115,11 @@ def list_scenes(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    return scene_crud.get_multi(db, skip=skip, limit=limit, gateway_id=gateway_id)
+    if gateway_id and not current_user.is_superuser:
+        access.load_device(db, current_user, gateway_id, "viewer")
+    rows = scene_crud.get_multi(db, skip=0, limit=500, gateway_id=gateway_id)
+    rows = access.filter_by_gateway(rows, db, current_user)
+    return rows[skip:skip + limit]
 
 
 @scenes_router.post("/", response_model=Scene, status_code=status.HTTP_201_CREATED)
@@ -86,6 +128,7 @@ def create_scene(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
+    _ensure_scene_write(db, current_user, scene_in)
     obj = scene_crud.create(db, scene_in)
     from app.services.scene_engine import scene_engine
     scene_engine.invalidate()
@@ -102,6 +145,17 @@ def update_scene(
     scene = scene_crud.get(db, scene_id)
     if not scene:
         raise HTTPException(status_code=404, detail="场景不存在")
+    _ensure_scene_manage(db, current_user, scene)
+
+    class _Merged:
+        pass
+
+    merged = _Merged()
+    merged.gateway_id = scene_in.gateway_id if scene_in.gateway_id is not None else scene.gateway_id
+    merged.triggers = scene.triggers if scene_in.triggers is None else scene_in.triggers
+    merged.conditions = scene.conditions if scene_in.conditions is None else scene_in.conditions
+    merged.actions = scene.actions if scene_in.actions is None else scene_in.actions
+    _ensure_scene_write(db, current_user, merged)
     obj = scene_crud.update(db, scene, scene_in)
     from app.services.scene_engine import scene_engine
     scene_engine.invalidate()
@@ -114,9 +168,11 @@ def delete_scene(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    scene = scene_crud.delete(db, scene_id)
+    scene = scene_crud.get(db, scene_id)
     if not scene:
         raise HTTPException(status_code=404, detail="场景不存在")
+    _ensure_scene_manage(db, current_user, scene)
+    scene = scene_crud.delete(db, scene_id)
     from app.services.scene_engine import scene_engine
     scene_engine.invalidate()
     return scene
@@ -130,7 +186,11 @@ def list_jobs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    return job_crud.get_multi(db, skip=skip, limit=limit, gateway_id=gateway_id)
+    if gateway_id and not current_user.is_superuser:
+        access.load_device(db, current_user, gateway_id, "viewer")
+    rows = job_crud.get_multi(db, skip=0, limit=500, gateway_id=gateway_id)
+    rows = access.filter_by_gateway(rows, db, current_user)
+    return rows[skip:skip + limit]
 
 
 @jobs_router.post("/", response_model=Job, status_code=status.HTTP_201_CREATED)
@@ -139,6 +199,7 @@ def create_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
+    _ensure_job_write(db, current_user, job_in)
     return job_crud.create(db, job_in)
 
 
@@ -152,6 +213,15 @@ def update_job(
     job = job_crud.get(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="任务不存在")
+    access.ensure_gateway(db, current_user, job.gateway_id, "operator")
+    gateway_id = job_in.gateway_id if job_in.gateway_id is not None else job.gateway_id
+    action = job_in.action if job_in.action is not None else job.action
+    class _Tmp:
+        pass
+    tmp = _Tmp()
+    tmp.gateway_id = gateway_id
+    tmp.action = action
+    _ensure_job_write(db, current_user, tmp)
     return job_crud.update(db, job, job_in)
 
 
@@ -161,7 +231,8 @@ def delete_job(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    job = job_crud.delete(db, job_id)
+    job = job_crud.get(db, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="任务不存在")
-    return job
+    access.ensure_gateway(db, current_user, job.gateway_id, "operator")
+    return job_crud.delete(db, job_id)

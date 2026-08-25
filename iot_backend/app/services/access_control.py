@@ -156,3 +156,75 @@ def visible_device_pk_ids(db: Session, user: User) -> Optional[Iterable[int]]:
     if user.is_superuser:
         return None
     return [d.id for d in visible_device_query(db, user).all()]
+
+
+def visible_device_id_set(db: Session, user: User) -> Optional[set]:
+    """非超管返回可见 device_id 字符串集合；超管返回 None"""
+    if user.is_superuser:
+        return None
+    return {d.device_id for d in visible_device_query(db, user).all()}
+
+
+def ensure_gateway(db: Session, user: User, gateway_id: Optional[str], min_role: str = "operator") -> None:
+    """网关设备 ACL；未指定 gateway 时仅超管可操作全局自动化"""
+    if user.is_superuser:
+        return
+    if not gateway_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="全局场景/任务仅超级管理员可操作，请指定 gateway_id",
+        )
+    load_device(db, user, gateway_id, min_role)
+
+
+def ensure_devices(
+    db: Session,
+    user: User,
+    device_ids: Iterable[Optional[str]],
+    min_role: str = "operator",
+) -> None:
+    """校验一组设备标识的 ACL"""
+    if user.is_superuser:
+        return
+    seen = set()
+    for device_id in device_ids:
+        if not device_id or device_id in seen:
+            continue
+        seen.add(device_id)
+        load_device(db, user, device_id, min_role)
+
+
+def filter_by_gateway(rows: list, db: Session, user: User) -> list:
+    """按可见网关过滤场景/任务/脚本/联动"""
+    visible = visible_device_id_set(db, user)
+    if visible is None:
+        return rows
+    return [r for r in rows if not getattr(r, "gateway_id", None) or r.gateway_id in visible]
+
+
+def can_enumerate_users(db: Session, user: User) -> bool:
+    """仅超管或具备任一产品/设备 admin 的用户可枚举用户列表"""
+    if user.is_superuser:
+        return True
+    for row in acl_crud.list_product_for_user(db, user.id):
+        if row.role == "admin":
+            return True
+    for row in acl_crud.list_device_for_user(db, user.id):
+        if row.role == "admin":
+            return True
+    return False
+
+
+def collect_scene_device_ids(scene_like) -> List[str]:
+    """从场景 triggers/actions 提取设备 ID"""
+    ids: List[str] = []
+    for item in getattr(scene_like, "triggers", None) or []:
+        if isinstance(item, dict) and item.get("device_id"):
+            ids.append(item["device_id"])
+    for item in getattr(scene_like, "actions", None) or []:
+        if isinstance(item, dict) and item.get("device_id"):
+            ids.append(item["device_id"])
+    for item in getattr(scene_like, "conditions", None) or []:
+        if isinstance(item, dict) and item.get("device_id"):
+            ids.append(item["device_id"])
+    return ids

@@ -16,6 +16,7 @@ from app.crud.firmware import firmware_crud, firmware_upgrade_task_crud
 from app.core.dependencies import get_current_active_user, has_permission
 from app.tasks.firmware_tasks import initiate_firmware_upgrade
 from app.schemas.firmware import Firmware, FirmwareCreate, FirmwareUpgradeTask, FirmwareUpgradeTaskCreate
+from app.services import access_control as access
 
 
 router = APIRouter()
@@ -32,9 +33,12 @@ def get_upgrade_tasks(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
-    """获取升级任务列表"""
+    """获取升级任务列表（按可见设备过滤）"""
+    pks = access.visible_device_pk_ids(db, current_user)
+    if device_id is not None and pks is not None and device_id not in list(pks):
+        raise HTTPException(status_code=403, detail="权限不足")
     return firmware_upgrade_task_crud.get_multi(
-        db, skip=skip, limit=limit, device_id=device_id, status=status
+        db, skip=skip, limit=limit, device_id=device_id, status=status, device_ids=pks
     )
 
 
@@ -48,6 +52,10 @@ def get_upgrade_task(
     task = firmware_upgrade_task_crud.get(db, id=task_id)
     if not task:
         raise HTTPException(status_code=404, detail="升级任务不存在")
+    device = device_crud.get(db, id=task.device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    access.ensure_device(db, current_user, device, "viewer")
     return task
 
 
@@ -58,25 +66,24 @@ async def create_upgrade_task(
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """创建固件升级任务"""
-    # 检查设备是否存在
     device = device_crud.get(db, id=task_in.device_id)
     if not device:
         raise HTTPException(status_code=404, detail="设备不存在")
+    access.ensure_device(db, current_user, device, "operator")
 
-    # 检查固件是否存在
     firmware = firmware_crud.get(db, id=task_in.firmware_id)
     if not firmware:
         raise HTTPException(status_code=404, detail="固件不存在")
+    if firmware.product_id and device.product_id and firmware.product_id != device.product_id:
+        raise HTTPException(status_code=400, detail="固件产品与设备产品不匹配")
+    access.ensure_product(db, current_user, firmware.product_id, "operator")
 
-    # 创建升级任务
     task = firmware_upgrade_task_crud.create(db, obj_in=task_in, created_by=current_user.id)
 
-    # 异步启动升级任务
     try:
         celery_task = initiate_firmware_upgrade.delay(task.id)
         firmware_upgrade_task_crud.update_celery_task_id(db, task.id, celery_task.id)
     except Exception as e:
-        # 如果 Celery 任务启动失败，更新状态
         firmware_upgrade_task_crud.update_status(db, task.id, "failed", error_message=str(e))
 
     return task
@@ -92,6 +99,10 @@ def cancel_upgrade_task(
     task = firmware_upgrade_task_crud.get(db, id=task_id)
     if not task:
         raise HTTPException(status_code=404, detail="升级任务不存在")
+    device = device_crud.get(db, id=task.device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    access.ensure_device(db, current_user, device, "operator")
 
     if task.status not in ["pending", "in_progress"]:
         raise HTTPException(status_code=400, detail="该任务无法取消")
@@ -126,8 +137,15 @@ def get_firmwares(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
-    """获取固件列表"""
-    return firmware_crud.get_multi(db, skip=skip, limit=limit, product_id=product_id)
+    """获取固件列表（按可见产品过滤）"""
+    if product_id:
+        access.ensure_product(db, current_user, product_id, "viewer")
+        return firmware_crud.get_multi(db, skip=skip, limit=limit, product_id=product_id)
+    rows = firmware_crud.get_multi(db, skip=0, limit=500)
+    if not current_user.is_superuser:
+        allowed = set(access.visible_product_ids(db, current_user))
+        rows = [r for r in rows if r.product_id in allowed]
+    return rows[skip:skip + limit]
 
 
 @router.get("/{firmware_id}", response_model=Firmware)
@@ -140,6 +158,7 @@ def get_firmware(
     firmware = firmware_crud.get(db, id=firmware_id)
     if not firmware:
         raise HTTPException(status_code=404, detail="固件不存在")
+    access.ensure_product(db, current_user, firmware.product_id, "viewer")
     return firmware
 
 
@@ -153,6 +172,7 @@ async def upload_firmware(
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """上传固件文件"""
+    access.ensure_product(db, current_user, product_id, "operator")
     # 检查版本是否已存在
     existing = firmware_crud.get_by_version_and_product(db, version=version, product_id=product_id)
     if existing:
@@ -209,6 +229,7 @@ def update_firmware(
     firmware = firmware_crud.get(db, id=firmware_id)
     if not firmware:
         raise HTTPException(status_code=404, detail="固件不存在")
+    access.ensure_product(db, current_user, firmware.product_id, "operator")
 
     return firmware_crud.update(
         db,
@@ -251,6 +272,7 @@ def get_latest_firmware(
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
     """获取产品的最新固件"""
+    access.ensure_product(db, current_user, product_id, "viewer")
     firmware = firmware_crud.get_latest_firmware(db, product_id=product_id)
     if not firmware:
         raise HTTPException(status_code=404, detail="未找到该产品的固件")

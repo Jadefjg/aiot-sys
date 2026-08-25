@@ -138,7 +138,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUsers, getUser, createUser, updateUser, deleteUser, assignRoles } from '@/api/modules/users'
+import { getUsers, getUser, createUser, updateUser, deleteUser, assignRoles, getUserRoles } from '@/api/modules/users'
 import { getRoles } from '@/api/modules/roles'
 
 // 状态
@@ -272,7 +272,9 @@ const handleUserSubmit = async () => {
           await createUser({
             username: userForm.username,
             email: userForm.email,
-            password: userForm.password
+            password: userForm.password,
+            is_active: userForm.is_active,
+            is_superuser: userForm.is_superuser
           })
           ElMessage.success('用户添加成功')
         }
@@ -310,10 +312,11 @@ const handleDelete = async (user) => {
 // 显示角色分配对话框
 const showRoleDialog = async (user) => {
   selectedUser.value = user
-  selectedRoleIds.value = user.roles?.map(r => r.id) || []
 
   try {
-    availableRoles.value = await getRoles()
+    const [roles, userRoles] = await Promise.all([getRoles(), getUserRoles(user.id)])
+    availableRoles.value = roles
+    selectedRoleIds.value = userRoles.map(r => r.id)
     roleDialogVisible.value = true
   } catch (error) {
     console.error('获取角色列表失败:', error)

@@ -117,6 +117,14 @@ def update_permission(
                 detail="Permission with this name already exists"
             )
 
+    if permission_in.code and permission_in.code != permission.code:
+        existing_code = permission_crud.get_by_code(db, code=permission_in.code)
+        if existing_code:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Permission with this code already exists"
+            )
+
     return permission_crud.update(db, db_obj=permission, obj_in=permission_in)
 
 

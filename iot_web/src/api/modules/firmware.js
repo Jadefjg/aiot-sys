@@ -27,7 +27,7 @@ export const deleteFirmware = (firmwareId) => {
 
 // 激活固件
 export const activateFirmware = (firmwareId) => {
-  return api.put(`/firmware/${firmwareId}/activate`)
+  return api.put(`/firmware/${firmwareId}`, null, { params: { is_active: true } })
 }
 
 // 获取产品最新固件

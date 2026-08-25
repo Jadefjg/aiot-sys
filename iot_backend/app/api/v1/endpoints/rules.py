@@ -35,12 +35,28 @@ def list_rules(
     return rows[skip:skip + limit]
 
 
+def _ensure_rule_action_targets(db: Session, user: User, actions) -> None:
+    """校验规则动作中的写设备目标 ACL"""
+    for action in actions or []:
+        if not isinstance(action, dict):
+            continue
+        if action.get("type") == "write" and action.get("device_id"):
+            access.load_device(db, user, action["device_id"], "operator")
+
+
 @rules_router.post("/", response_model=DataRule, status_code=status.HTTP_201_CREATED)
 def create_rule(
     body: DataRuleCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(has_permission("rule:write")),
 ) -> Any:
+    if body.product_id:
+        access.ensure_product(db, current_user, body.product_id, "operator")
+    elif not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="全局规则仅超级管理员可创建")
+    if body.device_id:
+        access.load_device(db, current_user, body.device_id, "operator")
+    _ensure_rule_action_targets(db, current_user, body.actions)
     from app.services.rule_engine import rule_engine
     obj = rule_crud.create(db, body)
     rule_engine.invalidate()
@@ -57,6 +73,18 @@ def update_rule(
     obj = rule_crud.get(db, rule_id)
     if not obj:
         raise HTTPException(status_code=404, detail="规则不存在")
+    if obj.product_id:
+        access.ensure_product(db, current_user, obj.product_id, "operator")
+    elif not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="全局规则仅超级管理员可修改")
+    product_id = body.product_id if body.product_id is not None else obj.product_id
+    if product_id:
+        access.ensure_product(db, current_user, product_id, "operator")
+    device_id = body.device_id if body.device_id is not None else obj.device_id
+    if device_id:
+        access.load_device(db, current_user, device_id, "operator")
+    actions = body.actions if body.actions is not None else obj.actions
+    _ensure_rule_action_targets(db, current_user, actions)
     from app.services.rule_engine import rule_engine
     updated = rule_crud.update(db, obj, body)
     rule_engine.invalidate()
@@ -69,9 +97,14 @@ def delete_rule(
     db: Session = Depends(get_db),
     current_user: User = Depends(has_permission("rule:write")),
 ) -> Any:
-    obj = rule_crud.delete(db, rule_id)
+    obj = rule_crud.get(db, rule_id)
     if not obj:
         raise HTTPException(status_code=404, detail="规则不存在")
+    if obj.product_id:
+        access.ensure_product(db, current_user, obj.product_id, "operator")
+    elif not current_user.is_superuser:
+        raise HTTPException(status_code=403, detail="全局规则仅超级管理员可删除")
+    obj = rule_crud.delete(db, rule_id)
     from app.services.rule_engine import rule_engine
     rule_engine.invalidate()
     return obj

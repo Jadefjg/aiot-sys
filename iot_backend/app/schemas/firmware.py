@@ -17,7 +17,13 @@ class FirmwareCreate(FirmwareBase):
 
 class Firmware(FirmwareBase):
     id: int
+    file_name: Optional[str] = None
+    file_size: Optional[int] = None
+    is_active: Optional[bool] = None
+    is_beta: Optional[bool] = None
+    release_notes: Optional[str] = None
     created_at: datetime
+
     class Config:
         from_attributes = True
 
@@ -38,5 +44,6 @@ class FirmwareUpgradeTask(FirmwareUpgradeTaskBase):
     start_time: datetime
     end_time: Optional[datetime] = None
     error_message: Optional[str] = None
+
     class Config:
         from_attributes = True

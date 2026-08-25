@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user
 from app.crud.alarm import alarm_crud
+from app.crud.device import device_crud
 from app.db.session import get_db
 from app.schemas.alarm import Alarm
 from app.schemas.user import User
@@ -43,4 +44,8 @@ def acknowledge_alarm(
     alarm = alarm_crud.get(db, alarm_id)
     if not alarm:
         raise HTTPException(status_code=404, detail="告警不存在")
+    device = device_crud.get(db, id=alarm.device_id) if alarm.device_id else None
+    if not device:
+        raise HTTPException(status_code=404, detail="告警关联设备不存在")
+    access.ensure_device(db, current_user, device, "operator")
     return alarm_crud.acknowledge(db, alarm, current_user.id)

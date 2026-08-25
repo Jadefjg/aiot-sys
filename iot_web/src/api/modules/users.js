@@ -39,3 +39,13 @@ export const deleteUser = (userId) => {
 export const assignRoles = (userId, roleIds) => {
   return api.post(`/users/${userId}/roles`, { role_ids: roleIds })
 }
+
+// 获取用户角色
+export const getUserRoles = (userId) => {
+  return api.get(`/users/${userId}/roles`)
+}
+
+// 获取当前用户权限
+export const getMyPermissions = () => {
+  return api.get('/users/me/permissions')
+}

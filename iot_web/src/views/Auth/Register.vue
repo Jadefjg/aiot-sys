@@ -2,6 +2,13 @@
   <div class="register-container">
     <div class="register-box">
       <h2>注册账号</h2>
+      <el-alert
+        title="本系统暂不支持公开注册，请联系管理员创建账号"
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      />
       <el-form
         ref="formRef"
         :model="form"
@@ -123,7 +130,12 @@ const handleRegister = async () => {
         ElMessage.success('注册成功，请登录')
         router.push('/login')
       } catch (error) {
-        ElMessage.error('注册失败，用户名或邮箱可能已存在')
+        const status = error.response?.status
+        if (status === 403) {
+          ElMessage.error('注册需要管理员权限，请联系管理员创建账号')
+        } else {
+          ElMessage.error('注册失败，用户名或邮箱可能已存在')
+        }
       } finally {
         loading.value = false
       }
