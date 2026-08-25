@@ -5,6 +5,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from app.db.models.alarm import Alarm
+from app.db.models.device import Device
 from app.schemas.alarm import AlarmCreate
 
 
@@ -26,8 +27,16 @@ class CRUDAlarm:
         limit: int = 100,
         device_id: Optional[int] = None,
         acknowledged: Optional[bool] = None,
+        owner_id: Optional[int] = None,
+        device_ids: Optional[List[int]] = None,
     ) -> List[Alarm]:
         query = db.query(Alarm)
+        if device_ids is not None:
+            if not list(device_ids):
+                return []
+            query = query.filter(Alarm.device_id.in_(list(device_ids)))
+        elif owner_id is not None:
+            query = query.join(Device, Alarm.device_id == Device.id).filter(Device.owner_id == owner_id)
         if device_id is not None:
             query = query.filter(Alarm.device_id == device_id)
         if acknowledged is not None:

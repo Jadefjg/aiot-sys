@@ -1,5 +1,5 @@
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -18,7 +18,7 @@ class Device(Base):
     group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
     # 网关/子设备层级：子设备挂 gateway_id
     gateway_id = Column(String(100), nullable=True, index=True)
-    link_id = Column(String(100), nullable=True)
+    link_id = Column(String(100), nullable=True, index=True)
     status = Column(String(20), default="offline")
     disabled = Column(Boolean, default=False)
     error = Column(Boolean, default=False)
@@ -48,6 +48,9 @@ class Device(Base):
 
 class DeviceData(Base):
     __tablename__ = "device_data"
+    __table_args__ = (
+        Index("ix_device_data_device_ts", "device_id", "timestamp"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True)

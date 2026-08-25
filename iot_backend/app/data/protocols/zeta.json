@@ -1,0 +1,16 @@
+{
+  "name": "zeta",
+  "title": "ZETA / Zetag",
+  "description": "低功耗广域标签协议，DGIoT 物流场景常用。本平台以 MQTT 网关接入为主。",
+  "version": "1.0",
+  "transport": "lpwan/mqtt",
+  "implemented": false,
+  "topics": [
+    "device/{id}/values",
+    "device/{id}/location"
+  ],
+  "fields": [
+    { "name": "tag_id", "label": "标签ID", "type": "text" },
+    { "name": "gateway_id", "label": "网关ID", "type": "text" }
+  ]
+}

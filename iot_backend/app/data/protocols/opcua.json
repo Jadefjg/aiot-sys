@@ -1,0 +1,14 @@
+{
+  "name": "opcua",
+  "title": "OPC UA",
+  "description": "工业自动化统一架构协议",
+  "version": "1.0",
+  "transport": "tcp",
+  "implemented": true,
+  "fields": [
+    { "name": "endpoint", "label": "Endpoint URL", "type": "text" },
+    { "name": "security_mode", "label": "安全模式", "type": "select", "options": ["None", "Sign", "SignAndEncrypt"] },
+    { "name": "username", "label": "用户名", "type": "text" },
+    { "name": "password", "label": "密码", "type": "password" }
+  ]
+}

@@ -86,7 +86,10 @@ def create_scene(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    return scene_crud.create(db, scene_in)
+    obj = scene_crud.create(db, scene_in)
+    from app.services.scene_engine import scene_engine
+    scene_engine.invalidate()
+    return obj
 
 
 @scenes_router.put("/{scene_id}", response_model=Scene)
@@ -99,7 +102,10 @@ def update_scene(
     scene = scene_crud.get(db, scene_id)
     if not scene:
         raise HTTPException(status_code=404, detail="场景不存在")
-    return scene_crud.update(db, scene, scene_in)
+    obj = scene_crud.update(db, scene, scene_in)
+    from app.services.scene_engine import scene_engine
+    scene_engine.invalidate()
+    return obj
 
 
 @scenes_router.delete("/{scene_id}", response_model=Scene)
@@ -111,6 +117,8 @@ def delete_scene(
     scene = scene_crud.delete(db, scene_id)
     if not scene:
         raise HTTPException(status_code=404, detail="场景不存在")
+    from app.services.scene_engine import scene_engine
+    scene_engine.invalidate()
     return scene
 
 

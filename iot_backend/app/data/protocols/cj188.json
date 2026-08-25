@@ -1,0 +1,16 @@
+{
+  "name": "cj188",
+  "title": "CJ/T188-2004/2018",
+  "description": "户用计量仪表数据传输技术条件，用于水/气/热表。",
+  "version": "2018",
+  "transport": "serial",
+  "implemented": false,
+  "topics": [
+    "protocol/cj188/{linker}/{link_id}/open",
+    "protocol/cj188/{linker}/{link_id}/read"
+  ],
+  "fields": [
+    { "name": "address", "label": "表地址", "type": "text" },
+    { "name": "meter_type", "label": "表类型", "type": "select", "options": ["water", "gas", "heat"] }
+  ]
+}

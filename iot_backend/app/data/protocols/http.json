@@ -1,0 +1,14 @@
+{
+  "name": "http",
+  "title": "HTTP 采集",
+  "description": "设备或网关通过 HTTP POST 上报。对应采集通道 POST /channels/{id}/ingest。",
+  "version": "1.0",
+  "transport": "http",
+  "default_port": 80,
+  "implemented": true,
+  "topics": [],
+  "fields": [
+    { "name": "path", "label": "上报路径", "type": "text", "default": "/api/v1/channels/{id}/ingest" },
+    { "name": "token", "label": "鉴权 Token", "type": "text" }
+  ]
+}

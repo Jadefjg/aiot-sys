@@ -67,6 +67,7 @@ class Script(Base):
     name = Column(String(100), nullable=False)
     gateway_id = Column(String(100), nullable=True, index=True)
     content = Column(Text, nullable=False)
+    language = Column(String(20), default="js")
     interval_seconds = Column(Integer, default=0)
     delay_seconds = Column(Integer, default=0)
     repeat_count = Column(Integer, default=0)

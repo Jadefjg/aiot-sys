@@ -81,8 +81,22 @@ class DeviceRuntimeService:
         if device.disabled:
             return device
 
+        product = product_crud.get_by_product_id(db, device.product_id)
+        try:
+            from app.services.thing_parser import decode_values
+            values = decode_values(product, values)
+        except Exception as exc:
+            logger.warning("Thing parser: %s", exc)
+
         merged = dict(device.values or {})
         merged.update(values)
+        try:
+            from app.services.thing_formula import apply_property_formulas
+            props = (product.model or {}).get("properties", []) if product else []
+            values = apply_property_formulas(props, values)
+            merged.update(values)
+        except Exception as exc:
+            logger.warning("Thing formula: %s", exc)
         device.values = merged
         device.status = "online"
         device.last_online_at = datetime.utcnow()
@@ -92,6 +106,36 @@ class DeviceRuntimeService:
         db.commit()
         db.refresh(device)
 
+        try:
+            from app.services.scene_engine import scene_engine
+            scene_engine.on_device_values(db, device_id, values, merged)
+        except Exception as exc:
+            logger.warning("Scene engine: %s", exc)
+
+        try:
+            from app.crud.channel import shadow_crud
+            shadow_crud.upsert_reported(db, device_id, values)
+        except Exception as exc:
+            logger.warning("Device shadow: %s", exc)
+
+        try:
+            from app.services.rule_engine import rule_engine
+            rule_engine.on_values(db, device, values, merged, publish_alarm)
+        except Exception as exc:
+            logger.warning("Rule engine: %s", exc)
+
+        try:
+            from app.services.channel_runtime import channel_runtime
+            channel_runtime.on_device_values(db, device, values)
+        except Exception as exc:
+            logger.warning("Channel runtime: %s", exc)
+
+        try:
+            from app.services.script_engine import script_engine
+            script_engine.on_device_values(db, device_id, values, merged)
+        except Exception as exc:
+            logger.warning("Script engine: %s", exc)
+
         device_data_crud.create(
             db,
             DeviceDataCreate(
@@ -99,7 +143,6 @@ class DeviceRuntimeService:
             ),
         )
 
-        product = product_crud.get_by_product_id(db, device.product_id)
         validators = (product.model or {}).get("validators", []) if product else []
         for alarm_info in evaluate_validators(validators, merged):
             alarm = alarm_crud.create(
@@ -125,11 +168,21 @@ class DeviceRuntimeService:
         device = device_crud.get_by_device_id(db, device_id)
         if not device:
             return None
-        return device_crud.update(
+        device = device_crud.update(
             db,
             device,
             DeviceUpdate(latitude=lat, longitude=lng, geo_code=geo_code),
         )
+        device_data_crud.create(
+            db,
+            DeviceDataCreate(
+                device_id=device_id,
+                data={"latitude": lat, "longitude": lng, "geo_code": geo_code},
+                data_type="location",
+                quality="good",
+            ),
+        )
+        return device
 
     def set_error(self, db: Session, device_id: str, error_string: str) -> Optional[Device]:
         device = device_crud.get_by_device_id(db, device_id)

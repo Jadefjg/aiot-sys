@@ -43,6 +43,16 @@ def login_for_access_token(
             "token_type": "bearer",
         }
 
+
+@router.post("/token", response_model=Token)
+def login_token_alias(
+    db: Session = Depends(get_db),
+    form_data: OAuth2PasswordRequestForm = Depends(),
+) -> Any:
+    """Swagger OAuth2 兼容别名"""
+    return login_for_access_token(db=db, form_data=form_data)
+
+
 @router.post("/test-token", response_model=User)
 def test_token(current_user: User = Depends(get_current_active_user)) -> Any:
     """ Test access token """

@@ -10,11 +10,9 @@ export const getFirmware = (firmwareId) => {
   return api.get(`/firmware/${firmwareId}`)
 }
 
-// 上传固件
+// 上传固件（FormData 需由浏览器自动设置 Content-Type 与 boundary）
 export const uploadFirmware = (formData) => {
-  return api.post('/firmware/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+  return api.post('/firmware/upload', formData)
 }
 
 // 更新固件

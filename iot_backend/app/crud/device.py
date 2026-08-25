@@ -23,6 +23,12 @@ class CRUDDevice:
     def get_by_product(self, db: Session, product_id: str, skip: int = 0,limit: int = 100) -> List[Device]:
         return db.query(Device).filter(Device.product_id == product_id).offset(skip).limit(limit).all()
 
+    def get_by_link_id(self, db: Session, link_id: str) -> List[Device]:
+        return db.query(Device).filter(Device.link_id == link_id).all()
+
+    def get_by_gateway_id(self, db: Session, gateway_id: str) -> List[Device]:
+        return db.query(Device).filter(Device.gateway_id == gateway_id).all()
+
     def create(self, db: Session, obj_in: DeviceCreate) -> Device:
         db_obj = Device(**obj_in.model_dump())
         db.add(db_obj)
@@ -73,15 +79,21 @@ class CRUDDevice:
 
 class CRUDDeviceData:
     def create(self, db: Session, obj_in: DeviceDataCreate) -> Optional[DeviceData]:
-        # 首先获取设备
         device = device_crud.get_by_device_id(db, obj_in.device_id)
         if not device:
             return None
+        from app.services.timeseries import timeseries
+        timeseries.write_values(
+            device.device_id, device.product_id or "default",
+            obj_in.data or {}, obj_in.data_type or "property",
+        )
+        if timeseries.enabled:
+            return None
         db_obj = DeviceData(
-        device_id=device.id,
-        data_type=obj_in.data_type,
-        data=obj_in.data,
-        quality=obj_in.quality
+            device_id=device.id,
+            data_type=obj_in.data_type,
+            data=obj_in.data,
+            quality=obj_in.quality,
         )
         db.add(db_obj)
         db.commit()
@@ -98,6 +110,20 @@ class CRUDDeviceData:
 
     def get_data_by_time_range(self, db: Session, device_id: int, start_time:datetime, end_time: datetime) -> List[DeviceData]:
         return db.query(DeviceData).filter(and_(DeviceData.device_id == device_id,DeviceData.timestamp >= start_time,DeviceData.timestamp <= end_time)).order_by(DeviceData.timestamp).all()
+
+    def get_location_track(
+        self, db: Session, device_id: int, skip: int = 0, limit: int = 500
+    ) -> List[DeviceData]:
+        """定位轨迹"""
+        rows = (
+            db.query(DeviceData)
+            .filter(DeviceData.device_id == device_id, DeviceData.data_type == "location")
+            .order_by(desc(DeviceData.timestamp))
+            .offset(skip)
+            .limit(limit)
+            .all()
+        )
+        return list(reversed(rows))
 
 
 class CRUDDeviceCommand:
@@ -141,6 +167,19 @@ class CRUDDeviceCommand:
             DeviceCommand.status == "pending"
             )
         ).all()
+
+
+def prune_old_device_data(db: Session, days: int = 30, batch: int = 3000) -> int:
+    """删除过期历史点，限制批量以免锁表过久。保留最近 30 天。"""
+    from sqlalchemy import text
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    limit = max(1, min(int(batch), 10000))
+    result = db.execute(
+        text(f"DELETE FROM device_data WHERE timestamp < :c LIMIT {limit}"),
+        {"c": cutoff},
+    )
+    db.commit()
+    return result.rowcount or 0
 
 
 # 实例化CRUD对象

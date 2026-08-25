@@ -2,6 +2,8 @@ from pydantic import BaseModel, EmailStr
 from typing import List, Optional
 from datetime import datetime
 
+from app.schemas.permission import Permission as PermissionDetail
+
 
 class UserBase(BaseModel):
     username: str
@@ -23,12 +25,12 @@ class UserUpdate(UserBase):
 class UserInDBBase(UserBase):
     id: int
     is_active: bool
+    is_superuser: bool = False
     created_at: datetime
     updated_at: datetime
 
-
-class Config:
-    from_attributes = True
+    class Config:
+        from_attributes = True
 
 
 class User(UserInDBBase):
@@ -54,6 +56,16 @@ class Role(RoleBase):
 
     class Config:
         from_attributes = True
+
+
+class RoleWithPermissions(Role):
+    """角色详情，包含已分配权限"""
+    permissions: List[PermissionDetail] = []
+
+
+class RolePermissionsAssign(BaseModel):
+    """批量分配角色权限"""
+    permission_ids: List[int] = []
 
 class PermissionBase(BaseModel):
     name: str

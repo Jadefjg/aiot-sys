@@ -1,0 +1,17 @@
+{
+  "name": "bacnet",
+  "title": "BACnet",
+  "description": "智能建筑自动化协议（IP / MSTP）。",
+  "version": "1.0",
+  "transport": "udp/serial",
+  "default_port": 47808,
+  "implemented": true,
+  "topics": [
+    "protocol/bacnet/{linker}/{link_id}/open",
+    "protocol/bacnet/{linker}/{link_id}/read"
+  ],
+  "fields": [
+    { "name": "device_instance", "label": "设备实例号", "type": "number" },
+    { "name": "object_type", "label": "对象类型", "type": "text", "default": "analogInput" }
+  ]
+}

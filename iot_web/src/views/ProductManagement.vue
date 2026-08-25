@@ -26,11 +26,12 @@
             {{ (row.model?.validators || []).length }} 规则
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="openModel(row)">物模型</el-button>
-            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
-            <el-button link type="danger" @click="remove(row)">删除</el-button>
+            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            <el-button link type="primary" @click="openModel(row)" v-if="canProductAdmin(row.product_id)">物模型</el-button>
+            <el-button link type="primary" @click="openEdit(row)" v-if="canProductAdmin(row.product_id)">编辑</el-button>
+            <el-button link type="danger" @click="remove(row)" v-if="canProductAdmin(row.product_id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -66,7 +67,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="modelVisible" title="编辑物模型" width="800px" top="5vh">
+    <el-dialog v-model="modelVisible" title="编辑物模型" width="1080px" top="5vh">
       <el-tabs v-model="modelTab">
         <el-tab-pane label="属性" name="properties">
           <el-button size="small" @click="addProp" style="margin-bottom: 8px">添加属性</el-button>
@@ -92,10 +93,16 @@
                 </el-select>
               </template>
             </el-table-column>
-            <el-table-column label="单位" width="80">
+            <el-table-column label="单位" width="70">
               <template #default="{ row }"><el-input v-model="row.unit" size="small" /></template>
             </el-table-column>
-            <el-table-column label="" width="60">
+            <el-table-column label="地址" width="90">
+              <template #default="{ row }"><el-input v-model="row.address" size="small" placeholder="寄存器" /></template>
+            </el-table-column>
+            <el-table-column label="公式" width="110">
+              <template #default="{ row }"><el-input v-model="row.formula" size="small" placeholder="%s*0.1" /></template>
+            </el-table-column>
+            <el-table-column label="" width="50">
               <template #default="{ $index }">
                 <el-button link type="danger" @click="modelDraft.properties.splice($index, 1)">删</el-button>
               </template>
@@ -153,20 +160,83 @@
         <el-button type="primary" @click="saveModel">保存物模型</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="detailVisible" title="产品详情" width="760px" top="5vh">
+      <div v-loading="detailLoading">
+        <template v-if="detailProduct">
+          <el-descriptions :column="2" border size="small">
+            <el-descriptions-item label="产品ID">{{ detailProduct.product_id }}</el-descriptions-item>
+            <el-descriptions-item label="名称">{{ detailProduct.name }}</el-descriptions-item>
+            <el-descriptions-item label="协议">{{ detailProduct.protocol || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="版本">{{ detailProduct.version || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="能力">
+              <el-tag v-if="detailProduct.is_gateway" size="small">网关</el-tag>
+              <el-tag v-if="detailProduct.ota" size="small" type="success">OTA</el-tag>
+              <el-tag v-if="detailProduct.controllable" size="small" type="info">可控</el-tag>
+              <el-tag v-if="detailProduct.writable" size="small" type="warning">可写</el-tag>
+              <span v-if="!detailProduct.is_gateway && !detailProduct.ota && !detailProduct.controllable && !detailProduct.writable">-</span>
+            </el-descriptions-item>
+            <el-descriptions-item label="物模型">
+              {{ (detailProduct.model?.properties || []).length }} 属性 /
+              {{ (detailProduct.model?.actions || []).length }} 动作 /
+              {{ (detailProduct.model?.validators || []).length }} 规则
+            </el-descriptions-item>
+            <el-descriptions-item label="描述" :span="2">
+              {{ detailProduct.description || '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+
+          <el-divider content-position="left">物模型属性</el-divider>
+          <el-table
+            :data="detailProduct.model?.properties || []"
+            size="small"
+            empty-text="暂无属性"
+            max-height="200"
+          >
+            <el-table-column prop="name" label="标识" />
+            <el-table-column prop="label" label="名称" />
+            <el-table-column prop="type" label="类型" width="90" />
+            <el-table-column prop="mode" label="模式" width="70" />
+            <el-table-column prop="unit" label="单位" width="70" />
+            <el-table-column prop="address" label="地址" width="80" />
+            <el-table-column prop="formula" label="公式" />
+          </el-table>
+
+          <el-divider content-position="left">协议配置</el-divider>
+          <el-text v-if="!configKeys.length" type="info">暂无协议配置</el-text>
+          <el-tag v-for="key in configKeys" :key="key" style="margin-right: 8px">{{ key }}</el-tag>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="detailVisible = false">关闭</el-button>
+        <el-button type="primary" @click="goFullDetail">完整详情页</el-button>
+        <el-button type="success" @click="openModelFromDetail">编辑物模型</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref, computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useAuthStore } from '@/store/modules/auth'
 import {
-  getProducts, createProduct, updateProduct, updateThingModel, deleteProduct
+  getProducts, getProduct, createProduct, updateProduct, updateThingModel, deleteProduct
 } from '@/api/modules/products'
 
+const authStore = useAuthStore()
+const canProductAdmin = (pid) => authStore.isSuperuser || authStore.productRole(pid) === 'admin'
+
+const router = useRouter()
+const route = useRoute()
 const loading = ref(false)
 const products = ref([])
 const formVisible = ref(false)
 const modelVisible = ref(false)
+const detailVisible = ref(false)
+const detailLoading = ref(false)
+const detailProduct = ref(null)
 const editing = ref(null)
 const currentProduct = ref(null)
 const modelTab = ref('properties')
@@ -178,10 +248,21 @@ const modelDraft = reactive({
   properties: [], events: [], actions: [], validators: [], settings: []
 })
 
+const configKeys = computed(() => {
+  const config = detailProduct.value?.config
+  return config && typeof config === 'object' ? Object.keys(config) : []
+})
+
 const fetchProducts = async () => {
   loading.value = true
   try {
-    products.value = await getProducts()
+    const list = await getProducts()
+    products.value = Array.isArray(list) ? list : []
+    const editId = route.query.edit
+    if (editId) {
+      const row = products.value.find((p) => p.product_id === editId)
+      if (row) openModel(row)
+    }
   } finally {
     loading.value = false
   }
@@ -204,6 +285,33 @@ const openEdit = (row) => {
     controllable: row.controllable, writable: row.writable
   })
   formVisible.value = true
+}
+
+const openDetail = async (row) => {
+  detailVisible.value = true
+  detailLoading.value = true
+  detailProduct.value = null
+  try {
+    detailProduct.value = await getProduct(row.product_id)
+  } catch (error) {
+    console.error('加载产品详情失败:', error)
+    ElMessage.error('加载产品详情失败')
+    detailVisible.value = false
+  } finally {
+    detailLoading.value = false
+  }
+}
+
+const goFullDetail = () => {
+  if (!detailProduct.value) return
+  detailVisible.value = false
+  router.push({ name: 'ProductDetail', params: { productId: detailProduct.value.product_id } })
+}
+
+const openModelFromDetail = () => {
+  if (!detailProduct.value) return
+  detailVisible.value = false
+  openModel(detailProduct.value)
 }
 
 const saveProduct = async () => {
@@ -232,7 +340,9 @@ const openModel = (row) => {
   modelVisible.value = true
 }
 
-const addProp = () => modelDraft.properties.push({ name: '', label: '', type: 'number', mode: 'r', unit: '' })
+const addProp = () => modelDraft.properties.push({
+  name: '', label: '', type: 'number', mode: 'r', unit: '', address: '', formula: ''
+})
 const addValidator = () => modelDraft.validators.push({
   type: 'compare', field: '', operator: '>', value: 0, title: '告警', message: '{field} 超限', level: 'warning'
 })

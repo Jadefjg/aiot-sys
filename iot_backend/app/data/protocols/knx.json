@@ -1,0 +1,17 @@
+{
+  "name": "knx",
+  "title": "KNX",
+  "description": "智能建筑总线协议，用于照明、暖通等楼宇控制。",
+  "version": "1.0",
+  "transport": "knxnet/ip",
+  "default_port": 3671,
+  "implemented": true,
+  "topics": [
+    "protocol/knx/{linker}/{link_id}/open",
+    "protocol/knx/{linker}/{link_id}/write"
+  ],
+  "fields": [
+    { "name": "group_address", "label": "组地址", "type": "text", "default": "1/1/1" },
+    { "name": "dpt", "label": "数据点类型", "type": "text", "default": "1.001" }
+  ]
+}

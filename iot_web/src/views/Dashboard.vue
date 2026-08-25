@@ -1,132 +1,68 @@
 <template>
   <div class="dashboard-container">
-    <el-row :gutter="20" class="stat-cards">
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
+    <el-row :gutter="16" class="stat-cards">
+      <el-col :xs="12" :sm="8" :md="4" v-for="item in statCards" :key="item.label">
+        <el-card shadow="hover" class="stat-card" @click="item.to && $router.push(item.to)">
           <div class="stat-content">
-            <div class="stat-icon device-icon">
-              <el-icon :size="32"><Cpu /></el-icon>
+            <div class="stat-icon" :style="{ background: item.color }">
+              <el-icon :size="28"><component :is="item.icon" /></el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-value">{{ stats.totalDevices }}</div>
-              <div class="stat-label">设备总数</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon online-icon">
-              <el-icon :size="32"><Connection /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ stats.onlineDevices }}</div>
-              <div class="stat-label">在线设备</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon user-icon">
-              <el-icon :size="32"><User /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ stats.totalUsers }}</div>
-              <div class="stat-label">用户总数</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-      <el-col :span="6">
-        <el-card shadow="hover" class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon firmware-icon">
-              <el-icon :size="32"><Upload /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-value">{{ stats.totalFirmware }}</div>
-              <div class="stat-label">固件版本</div>
+              <div class="stat-value">{{ item.value }}</div>
+              <div class="stat-label">{{ item.label }}</div>
             </div>
           </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-row :gutter="20" class="content-row">
+    <el-row :gutter="16">
       <el-col :span="16">
-        <el-card class="recent-devices-card">
+        <el-card>
           <template #header>
             <div class="card-header">
-              <span>最近设备活动</span>
-              <el-button type="primary" link @click="$router.push('/devices')">
-                查看全部
-              </el-button>
+              <span>最近设备</span>
+              <el-button type="primary" link @click="$router.push('/devices')">查看全部</el-button>
             </div>
           </template>
-          <el-table :data="recentDevices" style="width: 100%" v-loading="loading">
-            <el-table-column prop="device_id" label="设备ID" width="180" />
-            <el-table-column prop="device_name" label="设备名称" />
-            <el-table-column prop="status" label="状态" width="100">
+          <el-table :data="recentDevices" v-loading="loading" stripe>
+            <el-table-column prop="device_id" label="设备ID" width="160" />
+            <el-table-column prop="device_name" label="名称" />
+            <el-table-column prop="product_id" label="产品" width="120" />
+            <el-table-column prop="status" label="状态" width="90">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'online' ? 'success' : 'info'">
-                  {{ row.status === 'online' ? '在线' : '离线' }}
-                </el-tag>
+                <el-tag :type="statusType(row)" size="small">{{ statusText(row) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="firmware_version" label="固件版本" width="120" />
-            <el-table-column prop="last_online_at" label="最后活动" width="180">
+            <el-table-column label="操作" width="90">
               <template #default="{ row }">
-                {{ formatTime(row.last_online_at) }}
+                <el-button link type="primary" @click="$router.push(`/devices/${row.device_id}`)">详情</el-button>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
       </el-col>
       <el-col :span="8">
-        <el-card class="quick-actions-card">
+        <el-card>
           <template #header>
-            <span>快捷操作</span>
+            <div class="card-header">
+              <span>未确认告警</span>
+              <el-button type="primary" link @click="$router.push('/alarms')">告警中心</el-button>
+            </div>
           </template>
-          <div class="quick-actions">
-            <el-button type="primary" @click="$router.push('/devices')">
-              <el-icon><Cpu /></el-icon>
-              设备管理
-            </el-button>
-            <el-button type="success" @click="$router.push('/firmware')">
-              <el-icon><Upload /></el-icon>
-              固件升级
-            </el-button>
-            <el-button type="warning" @click="$router.push('/users')">
-              <el-icon><User /></el-icon>
-              用户管理
-            </el-button>
-            <el-button type="info" @click="$router.push('/roles')">
-              <el-icon><UserFilled /></el-icon>
-              角色管理
-            </el-button>
+          <el-empty v-if="!recentAlarms.length" description="暂无告警" :image-size="60" />
+          <div v-for="a in recentAlarms" :key="a.id" class="alarm-item">
+            <el-tag :type="a.level === 'error' ? 'danger' : 'warning'" size="small">{{ a.level }}</el-tag>
+            <span class="alarm-title">{{ a.title }}</span>
           </div>
         </el-card>
-
-        <el-card class="system-info-card" style="margin-top: 20px">
-          <template #header>
-            <span>系统信息</span>
-          </template>
-          <div class="system-info">
-            <div class="info-item">
-              <span class="info-label">系统状态</span>
-              <el-tag type="success">正常运行</el-tag>
-            </div>
-            <div class="info-item">
-              <span class="info-label">MQTT连接</span>
-              <el-tag type="success">已连接</el-tag>
-            </div>
-            <div class="info-item">
-              <span class="info-label">数据库</span>
-              <el-tag type="success">正常</el-tag>
-            </div>
+        <el-card style="margin-top: 16px">
+          <template #header><span>快捷入口</span></template>
+          <div class="quick-actions">
+            <el-button class="quick-btn" @click="$router.push('/products')">产品物模型</el-button>
+            <el-button class="quick-btn" @click="$router.push('/devices')">设备管理</el-button>
+            <el-button class="quick-btn" @click="$router.push('/scenes')">智能场景</el-button>
+            <el-button class="quick-btn" @click="$router.push('/screen')">数据大屏</el-button>
           </div>
         </el-card>
       </el-col>
@@ -135,155 +71,107 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { getOverview } from '@/api/modules/overview'
 import { getDevices, getOnlineDevices } from '@/api/modules/devices'
-import { getUsers } from '@/api/modules/users'
-import { getFirmwares } from '@/api/modules/firmware'
+import { getProducts } from '@/api/modules/products'
+import { getAlarms } from '@/api/modules/alarms'
+import { getGroups } from '@/api/modules/groups'
 
 const loading = ref(false)
-const stats = ref({
-  totalDevices: 0,
-  onlineDevices: 0,
-  totalUsers: 0,
-  totalFirmware: 0
-})
-const recentDevices = ref([])
+const overview = ref(null)
+const devices = ref([])
+const onlineDevices = ref([])
+const products = ref([])
+const groups = ref([])
+const recentAlarms = ref([])
 
-// 格式化时间
-const formatTime = (time) => {
-  if (!time) return '-'
-  const date = new Date(time)
-  return date.toLocaleString('zh-CN')
+const offlineCount = computed(() =>
+  overview.value ? overview.value.offline : devices.value.filter((d) => d.status !== 'online').length
+)
+const errorCount = computed(() =>
+  overview.value ? overview.value.errors : devices.value.filter((d) => d.error).length
+)
+const recentDevices = computed(() =>
+  overview.value?.recent_devices?.length ? overview.value.recent_devices : devices.value.slice(0, 8)
+)
+
+const statCards = computed(() => [
+  { label: '设备总数', value: overview.value?.devices ?? devices.value.length, icon: 'Cpu', color: '#409eff', to: '/devices' },
+  { label: '在线', value: overview.value?.online ?? onlineDevices.value.length, icon: 'Connection', color: '#67c23a', to: '/devices' },
+  { label: '离线', value: offlineCount.value, icon: 'Warning', color: '#909399', to: '/devices' },
+  { label: '异常', value: errorCount.value, icon: 'CircleClose', color: '#f56c6c', to: '/alarms' },
+  { label: '产品', value: overview.value?.products ?? products.value.length, icon: 'Box', color: '#e6a23c', to: '/products' },
+  { label: '组织', value: overview.value?.groups ?? groups.value.length, icon: 'OfficeBuilding', color: '#909399', to: '/groups' },
+])
+
+const statusType = (row) => {
+  if (row.error) return 'danger'
+  return row.status === 'online' ? 'success' : 'info'
+}
+const statusText = (row) => {
+  if (row.error) return '异常'
+  return row.status === 'online' ? '在线' : '离线'
 }
 
-// 获取统计数据
 const fetchStats = async () => {
   loading.value = true
   try {
-    // 并行获取所有数据
-    const [devices, onlineDevices, users, firmwares] = await Promise.all([
+    const ov = await getOverview().catch(() => null)
+    overview.value = ov
+    if (ov) {
+      recentAlarms.value = ov.recent_alarms || []
+      return
+    }
+    const [devs, online, prods, gs, alarms] = await Promise.all([
       getDevices().catch(() => []),
       getOnlineDevices().catch(() => []),
-      getUsers().catch(() => []),
-      getFirmwares().catch(() => [])
+      getProducts().catch(() => []),
+      getGroups().catch(() => []),
+      getAlarms({ acknowledged: false, limit: 8 }).catch(() => []),
     ])
-
-    stats.value = {
-      totalDevices: devices.length,
-      onlineDevices: onlineDevices.length,
-      totalUsers: users.length,
-      totalFirmware: firmwares.length
-    }
-
-    // 取最近5个设备显示
-    recentDevices.value = devices.slice(0, 5)
-  } catch (error) {
-    console.error('获取统计数据失败:', error)
+    devices.value = Array.isArray(devs) ? devs : (devs?.devices || [])
+    onlineDevices.value = Array.isArray(online) ? online : []
+    products.value = Array.isArray(prods) ? prods : []
+    groups.value = Array.isArray(gs) ? gs : []
+    recentAlarms.value = Array.isArray(alarms) ? alarms.slice(0, 8) : []
   } finally {
     loading.value = false
   }
 }
 
-onMounted(() => {
-  fetchStats()
-})
+onMounted(fetchStats)
 </script>
 
 <style scoped>
-.dashboard-container {
-  padding: 0;
-}
-
-.stat-cards {
-  margin-bottom: 20px;
-}
-
-.stat-card {
-  border-radius: 8px;
-}
-
-.stat-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
+.stat-cards { margin-bottom: 16px; }
+.stat-card { margin-bottom: 12px; cursor: pointer; }
+.stat-content { display: flex; align-items: center; gap: 12px; }
 .stat-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
+  width: 52px; height: 52px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center; color: #fff;
 }
-
-.device-icon {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.stat-value { font-size: 22px; font-weight: 700; color: #303133; }
+.stat-label { font-size: 13px; color: #909399; }
+.card-header { display: flex; justify-content: space-between; align-items: center; }
+.alarm-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 0; border-bottom: 1px solid #f0f0f0;
 }
-
-.online-icon {
-  background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-}
-
-.user-icon {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-}
-
-.firmware-icon {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-}
-
-.stat-info {
-  flex: 1;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: bold;
-  color: #333;
-}
-
-.stat-label {
-  font-size: 14px;
-  color: #999;
-  margin-top: 4px;
-}
-
-.content-row {
-  margin-top: 0;
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
+.alarm-title { font-size: 13px; color: #606266; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .quick-actions {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  align-items: stretch;
+  gap: 10px;
 }
-
-.quick-actions .el-button {
-  justify-content: flex-start;
+.quick-actions .quick-btn {
+  margin: 0;
   width: 100%;
-}
-
-.system-info {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.info-item {
-  display: flex;
-  justify-content: space-between;
+  height: 40px;
+  display: inline-flex;
+  justify-content: center;
   align-items: center;
-}
-
-.info-label {
-  color: #666;
+  box-sizing: border-box;
 }
 </style>

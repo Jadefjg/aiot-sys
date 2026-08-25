@@ -55,17 +55,19 @@
             {{ formatTime(row.created_at) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" @click="showEditDialog(row)">
-              编辑
-            </el-button>
-            <el-button type="warning" size="small" @click="showRoleDialog(row)">
-              分配角色
-            </el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">
-              删除
-            </el-button>
+            <div class="table-actions">
+              <el-button type="primary" size="small" @click="showEditDialog(row)">
+                编辑
+              </el-button>
+              <el-button type="warning" size="small" @click="showRoleDialog(row)">
+                分配角色
+              </el-button>
+              <el-button type="danger" size="small" @click="handleDelete(row)">
+                删除
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -366,5 +368,13 @@ onMounted(() => {
 
 .role-info p {
   margin: 0;
+}
+
+.table-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 </style>

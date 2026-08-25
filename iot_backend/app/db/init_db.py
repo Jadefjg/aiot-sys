@@ -12,6 +12,7 @@ DEVICE_EXTRA_COLUMNS = {
     "group_id": "INT NULL",
     "gateway_id": "VARCHAR(100) NULL",
     "link_id": "VARCHAR(100) NULL",
+    "device_metadata": "JSON NULL",
     "disabled": "BOOLEAN DEFAULT 0",
     "error": "BOOLEAN DEFAULT 0",
     "error_string": "TEXT NULL",
@@ -24,6 +25,10 @@ def ensure_schema():
     import_models()
     Base.metadata.create_all(bind=engine)
     _ensure_device_columns()
+    _ensure_script_columns()
+    _ensure_indexes()
+    _ensure_permissions()
+    _ensure_default_product()
 
 
 def _ensure_device_columns():
@@ -40,3 +45,112 @@ def _ensure_device_columns():
                 logger.info("Added column devices.%s", name)
             except Exception as exc:
                 logger.warning("Skip column %s: %s", name, exc)
+
+
+def _ensure_script_columns():
+    inspector = inspect(engine)
+    if "scripts" not in inspector.get_table_names():
+        return
+    existing = {c["name"] for c in inspector.get_columns("scripts")}
+    if "language" in existing:
+        return
+    with engine.begin() as conn:
+        try:
+            conn.execute(text("ALTER TABLE scripts ADD COLUMN `language` VARCHAR(20) DEFAULT 'js'"))
+            logger.info("Added column scripts.language")
+        except Exception as exc:
+            logger.warning("Skip scripts.language: %s", exc)
+
+
+INDEXES = [
+    ("device_data", "ix_device_data_device_ts", "device_id, timestamp"),
+    ("devices", "ix_devices_link_id", "link_id"),
+    ("channels", "ix_channels_enabled", "enabled"),
+    ("data_rules", "ix_data_rules_enabled", "enabled"),
+]
+
+DEFAULT_PERMISSIONS = [
+    ("通道读取", "channel:read", "channel", "read"),
+    ("通道写入", "channel:write", "channel", "write"),
+    ("规则写入", "rule:write", "rule", "write"),
+    ("连接写入", "link:write", "link", "write"),
+]
+
+
+def _ensure_indexes():
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table, name, cols in INDEXES:
+            if table not in tables:
+                continue
+            existing = {ix["name"] for ix in inspector.get_indexes(table)}
+            if name in existing:
+                continue
+            try:
+                conn.execute(text(f"CREATE INDEX `{name}` ON `{table}` ({cols})"))
+                logger.info("Created index %s on %s", name, table)
+            except Exception as exc:
+                logger.warning("Skip index %s: %s", name, exc)
+
+
+def _ensure_permissions():
+    from app.db.session import SessionLocal
+    from app.crud.permission import permission_crud
+    from app.schemas.permission import PermissionCreate
+
+    db = SessionLocal()
+    try:
+        for name, code, resource, action in DEFAULT_PERMISSIONS:
+            if permission_crud.get_by_code(db, code):
+                continue
+            permission_crud.create(
+                db,
+                obj_in=PermissionCreate(
+                    name=name, code=code, resource=resource, action=action, description=name
+                ),
+            )
+            logger.info("Seeded permission %s", code)
+    except Exception as exc:
+        logger.warning("Seed permissions: %s", exc)
+    finally:
+        db.close()
+
+
+def _ensure_default_product():
+    """保证 demo-meter-1 等默认产品存在，便于 ACL 与物解析"""
+    from app.crud.product import product_crud
+    from app.db.session import SessionLocal
+    from app.schemas.product import ProductCreate
+
+    db = SessionLocal()
+    try:
+        if product_crud.get_by_product_id(db, "default"):
+            return
+        product_crud.create(
+            db,
+            ProductCreate(
+                product_id="default",
+                name="默认电表产品",
+                protocol="mqtt",
+                description="演示设备默认产品，含温度/电能物模型",
+                model={
+                    "properties": [
+                        {"name": "temperature", "label": "温度", "unit": "℃", "type": "number", "mode": "r"},
+                        {"name": "energy", "label": "电能", "unit": "kWh", "type": "number", "mode": "r"},
+                        {"name": "voltage", "label": "电压", "unit": "V", "type": "number", "mode": "r"},
+                        {"name": "switch", "label": "开关", "type": "boolean", "mode": "rw"},
+                    ],
+                    "events": [],
+                    "actions": [{"name": "reboot", "label": "重启", "type": "button"}],
+                    "validators": [],
+                    "settings": [],
+                },
+                config={"parser": {"type": "json", "mapping": {}}},
+            ),
+        )
+        logger.info("Seeded product default")
+    except Exception as exc:
+        logger.warning("Seed default product: %s", exc)
+    finally:
+        db.close()

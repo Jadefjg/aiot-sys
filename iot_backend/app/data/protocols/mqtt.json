@@ -1,0 +1,31 @@
+{
+  "name": "mqtt",
+  "title": "MQTT 协议",
+  "description": "物联网标准发布/订阅协议。设备主题 device/{id}/#，产品 product/{id}/model|config/{name}，连接器 link/{linker}/{id}/#。",
+  "version": "1.0",
+  "transport": "tcp/ws",
+  "default_port": 1883,
+  "implemented": true,
+  "topics": [
+    "device/{id}/values",
+    "device/{id}/register",
+    "device/{id}/online",
+    "device/{id}/offline",
+    "device/{id}/event",
+    "device/{id}/location",
+    "device/{id}/error",
+    "device/{id}/sync",
+    "device/{id}/read",
+    "device/{id}/write",
+    "device/{id}/action",
+    "product/{id}/model",
+    "product/{id}/config/{name}",
+    "push/{id}/values"
+  ],
+  "fields": [
+    { "name": "client_id", "label": "客户端ID", "type": "text" },
+    { "name": "username", "label": "用户名", "type": "text" },
+    { "name": "password", "label": "密码", "type": "password" },
+    { "name": "keepalive", "label": "心跳(秒)", "type": "number", "default": 60 }
+  ]
+}

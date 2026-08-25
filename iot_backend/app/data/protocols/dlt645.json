@@ -1,0 +1,19 @@
+{
+  "name": "dlt645",
+  "title": "DL/T645-1997/2007",
+  "description": "多功能电能表通讯规约，常用于电力抄表。通过协议插件订阅 protocol/dlt645/{linker}/{link_id}/#。",
+  "version": "2007",
+  "transport": "serial",
+  "default_port": null,
+    "implemented": true,
+  "topics": [
+    "protocol/dlt645/{linker}/{link_id}/open",
+    "protocol/dlt645/{linker}/{link_id}/read",
+    "device/{id}/values"
+  ],
+  "fields": [
+    { "name": "address", "label": "表地址", "type": "text" },
+    { "name": "baudrate", "label": "波特率", "type": "select", "options": ["1200", "2400", "4800", "9600"] },
+    { "name": "password", "label": "密码", "type": "text" }
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "name": "modbus",
+  "title": "Modbus RTU/TCP",
+  "description": "工业现场总线协议，常用于 PLC 与传感器采集。平台通过 MQTT 主题 protocol/modbus/{linker}/{link_id}/# 与连接器协作。",
+  "version": "1.0",
+  "transport": "serial/tcp",
+  "default_port": 502,
+  "implemented": true,
+  "topics": [
+    "link/{linker}/{link_id}/open",
+    "link/{linker}/{link_id}/close",
+    "link/{linker}/{link_id}/up",
+    "link/{linker}/{link_id}/down",
+    "protocol/modbus/{linker}/{link_id}/open",
+    "protocol/modbus/{linker}/{link_id}/poll",
+    "protocol/modbus/{linker}/{link_id}/read",
+    "protocol/modbus/{linker}/{link_id}/write",
+    "device/{id}/values"
+  ],
+  "fields": [
+    { "name": "slave_id", "label": "从站地址", "type": "number", "default": 1 },
+    { "name": "byte_order", "label": "字节序", "type": "select", "options": ["ABCD", "CDAB", "BADC", "DCBA"] },
+    { "name": "timeout", "label": "超时(ms)", "type": "number", "default": 3000 },
+    { "name": "poll_interval", "label": "轮询间隔(ms)", "type": "number", "default": 1000 }
+  ]
+}

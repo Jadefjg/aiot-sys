@@ -1,11 +1,12 @@
 """
 固件管理API端点
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional, Any
 import hashlib
 import os
+import uuid
 
 from app.db.session import get_db
 from app.db.models.user import User
@@ -144,10 +145,10 @@ def get_firmware(
 
 @router.post("/upload", response_model=Firmware, status_code=status.HTTP_201_CREATED)
 async def upload_firmware(
-    product_id: str,
-    version: str,
-    description: Optional[str] = None,
     file: UploadFile = File(...),
+    product_id: str = Form(...),
+    version: str = Form(...),
+    description: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ) -> Any:
@@ -160,7 +161,9 @@ async def upload_firmware(
     # 保存固件文件
     upload_dir = settings.FIRMWARE_UPLOAD_DIR
     os.makedirs(upload_dir, exist_ok=True)
-    file_location = os.path.join(upload_dir, file.filename)
+    safe_name = os.path.basename(file.filename or "firmware.bin")
+    stored_name = f"{uuid.uuid4().hex}_{safe_name}"
+    file_location = os.path.join(upload_dir, stored_name)
 
     file_hash = hashlib.sha256()
     file_size = 0
@@ -177,7 +180,7 @@ async def upload_firmware(
     firmware_in = FirmwareCreate(
         version=version,
         product_id=product_id,
-        file_url=f"{settings.FIRMWARE_BASE_URL}/{file.filename}",
+        file_url=f"{settings.FIRMWARE_BASE_URL}/{stored_name}",
         file_hash=file_hash_str,
         description=description
     )

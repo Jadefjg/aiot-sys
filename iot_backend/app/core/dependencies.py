@@ -12,7 +12,7 @@ from app.db.models.user import User
 from app.core.config import settings
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 async def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_scheme)) -> User:
@@ -63,10 +63,13 @@ def has_permission(permission_code: str):
         if current_user.is_superuser:
             return current_user
 
-        # 检查用户角色的权限
-        for role in current_user.roles:
-            for permission in role.permissions:
-                if permission.code == permission_code:
+        for user_role in current_user.roles or []:
+            role = getattr(user_role, "role", None)
+            if not role:
+                continue
+            for rp in role.permissions or []:
+                perm = getattr(rp, "permission", None)
+                if perm and perm.code == permission_code:
                     return current_user
 
         raise HTTPException(
@@ -86,10 +89,13 @@ def has_any_permission(permission_codes: List[str]):
         if current_user.is_superuser:
             return current_user
 
-        # 检查用户角色的权限
-        for role in current_user.roles:
-            for permission in role.permissions:
-                if permission.code in permission_codes:
+        for user_role in current_user.roles or []:
+            role = getattr(user_role, "role", None)
+            if not role:
+                continue
+            for rp in role.permissions or []:
+                perm = getattr(rp, "permission", None)
+                if perm and perm.code in permission_codes:
                     return current_user
 
         raise HTTPException(

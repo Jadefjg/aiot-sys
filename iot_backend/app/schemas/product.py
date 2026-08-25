@@ -12,6 +12,8 @@ class ThingProperty(BaseModel):
     type: str = "number"  # number/string/boolean/enum
     mode: str = "r"  # r / w / rw
     precision: Optional[int] = None
+    formula: Optional[str] = None  # DGIoT 采集公式，%s/%q/%r
+    address: Optional[str] = None  # 寄存器或表地址
 
 
 class ThingEvent(BaseModel):

@@ -1,0 +1,14 @@
+{
+  "name": "coap",
+  "title": "CoAP",
+  "description": "受限设备轻量级 UDP 协议",
+  "version": "1.0",
+  "transport": "udp",
+  "default_port": 5683,
+  "implemented": true,
+  "fields": [
+    { "name": "host", "label": "主机", "type": "text" },
+    { "name": "port", "label": "端口", "type": "number", "default": 5683 },
+    { "name": "path", "label": "资源路径", "type": "text", "default": "/sensor" }
+  ]
+}

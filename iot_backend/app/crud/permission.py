@@ -15,6 +15,10 @@ class CRUDPermission:
         """根据名称获取权限"""
         return db.query(Permission).filter(Permission.name == name).first()
 
+    def get_by_code(self, db: Session, code: str) -> Optional[Permission]:
+        """根据代码获取权限"""
+        return db.query(Permission).filter(Permission.code == code).first()
+
     def get_multi(
         self, db: Session, *, skip: int = 0, limit: int = 100
     ) -> List[Permission]:
@@ -33,6 +37,7 @@ class CRUDPermission:
         """创建权限"""
         db_obj = Permission(
             name=obj_in.name,
+            code=obj_in.code,
             description=obj_in.description,
             resource=obj_in.resource,
             action=obj_in.action,

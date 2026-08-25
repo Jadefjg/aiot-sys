@@ -4,7 +4,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.db.models.group import DeviceGroup
-from app.db.models.smart import Job, Scene
+from app.db.models.smart import Binding, Job, Scene, Script
 from app.schemas.group import (
     DeviceGroupCreate,
     DeviceGroupUpdate,
@@ -13,6 +13,7 @@ from app.schemas.group import (
     SceneCreate,
     SceneUpdate,
 )
+from app.schemas.link import BindingCreate, BindingUpdate, ScriptCreate, ScriptUpdate
 
 
 class CRUDDeviceGroup:
@@ -117,6 +118,78 @@ class CRUDJob:
         return obj
 
 
+class CRUDBinding:
+    def get(self, db: Session, id: int) -> Optional[Binding]:
+        return db.query(Binding).filter(Binding.id == id).first()
+
+    def get_multi(
+        self, db: Session, skip: int = 0, limit: int = 100, gateway_id: Optional[str] = None
+    ) -> List[Binding]:
+        query = db.query(Binding)
+        if gateway_id:
+            query = query.filter(Binding.gateway_id == gateway_id)
+        return query.offset(skip).limit(limit).all()
+
+    def create(self, db: Session, obj_in: BindingCreate) -> Binding:
+        db_obj = Binding(**obj_in.model_dump())
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update(self, db: Session, db_obj: Binding, obj_in: BindingUpdate) -> Binding:
+        for field, value in obj_in.model_dump(exclude_unset=True).items():
+            setattr(db_obj, field, value)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def delete(self, db: Session, id: int) -> Optional[Binding]:
+        obj = self.get(db, id)
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
+
+
+class CRUDScript:
+    def get(self, db: Session, id: int) -> Optional[Script]:
+        return db.query(Script).filter(Script.id == id).first()
+
+    def get_multi(
+        self, db: Session, skip: int = 0, limit: int = 100, gateway_id: Optional[str] = None
+    ) -> List[Script]:
+        query = db.query(Script)
+        if gateway_id:
+            query = query.filter(Script.gateway_id == gateway_id)
+        return query.offset(skip).limit(limit).all()
+
+    def create(self, db: Session, obj_in: ScriptCreate) -> Script:
+        db_obj = Script(**obj_in.model_dump())
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def update(self, db: Session, db_obj: Script, obj_in: ScriptUpdate) -> Script:
+        for field, value in obj_in.model_dump(exclude_unset=True).items():
+            setattr(db_obj, field, value)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
+    def delete(self, db: Session, id: int) -> Optional[Script]:
+        obj = self.get(db, id)
+        if obj:
+            db.delete(obj)
+            db.commit()
+        return obj
+
+
 group_crud = CRUDDeviceGroup()
 scene_crud = CRUDScene()
 job_crud = CRUDJob()
+binding_crud = CRUDBinding()
+script_crud = CRUDScript()

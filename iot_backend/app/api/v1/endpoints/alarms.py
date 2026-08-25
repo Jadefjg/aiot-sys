@@ -6,10 +6,10 @@ from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user
 from app.crud.alarm import alarm_crud
-from app.crud.device import device_crud
 from app.db.session import get_db
 from app.schemas.alarm import Alarm
 from app.schemas.user import User
+from app.services import access_control as access
 
 router = APIRouter()
 
@@ -25,12 +25,12 @@ def list_alarms(
 ) -> Any:
     db_device_id = None
     if device_id:
-        device = device_crud.get_by_device_id(db, device_id)
-        if not device:
-            raise HTTPException(status_code=404, detail="设备不存在")
+        device = access.load_device(db, current_user, device_id, "viewer")
         db_device_id = device.id
+    pks = access.visible_device_pk_ids(db, current_user)
     return alarm_crud.get_multi(
-        db, skip=skip, limit=limit, device_id=db_device_id, acknowledged=acknowledged
+        db, skip=skip, limit=limit, device_id=db_device_id,
+        acknowledged=acknowledged, device_ids=pks,
     )
 
 

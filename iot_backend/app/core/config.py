@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     DEBUG: bool = False
 
+    # InfluxDB 时序库：遥测唯一存储（设备快照仍在 MySQL）
+    INFLUX_URL: str = ""
+    INFLUX_TOKEN: str = ""
+    INFLUX_ORG: str = "iot"
+    INFLUX_BUCKET: str = "telemetry"
+    INFLUX_ENABLED: bool = False
+
     # CORS 配置
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
 

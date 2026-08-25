@@ -53,6 +53,20 @@ class ProtocolManager:
         protocol_registry.register("mqtt", mqtt_service)
         logger.info("Registered MQTT service")
 
+        from .link_bus_service import link_bus_service
+        from .modbus_plugin import modbus_plugin
+
+        link_bus_service.attach(mqtt_service)
+        modbus_plugin.attach(mqtt_service)
+        protocol_registry.register("link", link_bus_service)
+        protocol_registry.register("modbus", modbus_plugin)
+        logger.info("Registered link bus and Modbus plugin")
+
+        from .dlt645_plugin import dlt645_plugin
+        dlt645_plugin.attach(mqtt_service)
+        protocol_registry.register("dlt645", dlt645_plugin)
+        logger.info("Registered DLT645 plugin")
+
         # 条件注册CoAP服务
         try:
             from .coap_service import COAP_AVAILABLE

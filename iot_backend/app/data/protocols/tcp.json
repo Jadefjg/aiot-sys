@@ -1,0 +1,17 @@
+{
+  "name": "tcp",
+  "title": "TCP 透传",
+  "description": "原始 TCP 采集通道，经 link/tcp-client 上报二进制，由协议插件解析。",
+  "version": "1.0",
+  "transport": "tcp",
+  "default_port": 9000,
+  "implemented": true,
+  "topics": [
+    "link/tcp-client/{link_id}/up",
+    "link/tcp-client/{link_id}/down"
+  ],
+  "fields": [
+    { "name": "host", "label": "主机", "type": "text" },
+    { "name": "port", "label": "端口", "type": "number", "default": 9000 }
+  ]
+}

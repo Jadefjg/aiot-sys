@@ -1,5 +1,7 @@
 import api from '../index'
 
+const did = (deviceId) => encodeURIComponent(deviceId)
+
 // 获取设备列表
 export const getDevices = (params = {}) => {
   return api.get('/devices', { params })
@@ -55,7 +57,7 @@ export const sendCommand = (deviceId, command) => {
   return api.post(`/devices/${deviceId}/commands`, command)
 }
 
-export const getDeviceValues = (deviceId) => api.get(`/devices/${deviceId}/values`)
+export const getDeviceValues = (deviceId) => api.get(`/devices/${did(deviceId)}/values`)
 export const putDeviceValues = (deviceId, values) =>
   api.post(`/devices/${deviceId}/values`, { values })
 export const syncDevice = (deviceId) =>
@@ -70,3 +72,17 @@ export const pushSetting = (deviceId, name, data) =>
   api.post(`/devices/${deviceId}/setting/${name}`, { data }, { timeout: 35000 })
 export const registerDevice = (deviceId, data = {}) =>
   api.post(`/devices/${deviceId}/register`, data)
+
+export const exportDevices = (params = {}) => api.get('/devices/export', { params })
+export const importDevices = (devices) => api.post('/devices/import', { devices })
+export const getDeviceTrack = (deviceId, params = {}) =>
+  api.get(`/devices/${deviceId}/track`, { params })
+export const getDeviceHistory = (deviceId, params = {}) =>
+  api.get(`/devices/${deviceId}/history`, { params })
+export const downloadGatewayConfig = (deviceId, database) =>
+  api.get(`/devices/${deviceId}/download/${database}`)
+export const getDeviceShadow = (deviceId) => api.get(`/devices/${deviceId}/shadow`)
+export const setDeviceShadow = (deviceId, desired) =>
+  api.put(`/devices/${deviceId}/shadow`, { desired })
+export const meterSwitch = (deviceId, data) =>
+  api.post(`/devices/${deviceId}/meter/switch`, data)

@@ -1,0 +1,19 @@
+{
+  "name": "s7",
+  "title": "Siemens S7",
+  "description": "西门子 PLC 协议（S7 / Fetch-Write / MPI / PPI）。",
+  "version": "1.0",
+  "transport": "tcp",
+  "default_port": 102,
+  "implemented": true,
+  "topics": [
+    "protocol/s7/{linker}/{link_id}/open",
+    "protocol/s7/{linker}/{link_id}/read",
+    "protocol/s7/{linker}/{link_id}/write"
+  ],
+  "fields": [
+    { "name": "rack", "label": "机架", "type": "number", "default": 0 },
+    { "name": "slot", "label": "槽位", "type": "number", "default": 1 },
+    { "name": "db", "label": "DB 块", "type": "number", "default": 1 }
+  ]
+}

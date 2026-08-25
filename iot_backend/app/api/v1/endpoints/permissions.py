@@ -19,12 +19,16 @@ def create_permission(
     """
     创建权限（需要超级用户）
     """
-    # 检查权限名称是否已存在
-    db_permission = permission_crud.get_by_name(db, name=permission_in.name)
-    if db_permission:
+    # 检查权限名称或代码是否已存在
+    if permission_crud.get_by_name(db, name=permission_in.name):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Permission with this name already exists"
+        )
+    if permission_crud.get_by_code(db, code=permission_in.code):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Permission with this code already exists"
         )
     return permission_crud.create(db, obj_in=permission_in)
 

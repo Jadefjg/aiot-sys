@@ -17,7 +17,7 @@ class DeviceBase(BaseModel):
 
 
 class DeviceCreate(DeviceBase):
-    pass
+    device_metadata: Optional[Dict[str, Any]] = None
 
 
 class DeviceUpdate(BaseModel):

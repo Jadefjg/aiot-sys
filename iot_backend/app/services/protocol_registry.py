@@ -204,11 +204,14 @@ class ProtocolRegistry:
         """
         service = cls.get_service(protocol_name)
         if service:
+            devices = getattr(service, "devices", {}) or {}
+            list_devices = getattr(service, "list_devices", None)
+            device_list = list_devices() if callable(list_devices) else list(devices.keys())
             return {
                 "protocol": protocol_name,
-                "connected": service.connected,
-                "device_count": len(service.devices),
-                "devices": service.list_devices()
+                "connected": bool(getattr(service, "connected", False)),
+                "device_count": len(devices) if hasattr(devices, "__len__") else 0,
+                "devices": device_list,
             }
         return None
 
@@ -236,9 +239,12 @@ class ProtocolRegistry:
         results = {}
         logger.info("Starting all protocol services...")
 
+        import inspect
+
         for protocol_name, service in cls.get_all_services().items():
             try:
-                success = await service.start()
+                started = service.start()
+                success = await started if inspect.isawaitable(started) else bool(started)
                 results[protocol_name] = success
                 if success:
                     logger.info(f"Started protocol service: {protocol_name}")
@@ -261,9 +267,12 @@ class ProtocolRegistry:
         results = {}
         logger.info("Stopping all protocol services...")
 
+        import inspect
+
         for protocol_name, service in cls.get_all_services().items():
             try:
-                success = await service.stop()
+                stopped = service.stop()
+                success = await stopped if inspect.isawaitable(stopped) else bool(stopped)
                 results[protocol_name] = success
                 if success:
                     logger.info(f"Stopped protocol service: {protocol_name}")

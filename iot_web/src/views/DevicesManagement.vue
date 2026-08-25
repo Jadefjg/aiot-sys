@@ -4,10 +4,14 @@
       <template #header>
         <div class="card-header">
           <span>设备管理</span>
-          <el-button type="primary" @click="showAddDialog">
-            <el-icon><Plus /></el-icon>
-            添加设备
-          </el-button>
+          <div class="header-actions">
+            <el-button @click="handleExport">导出</el-button>
+            <el-button @click="importDialogVisible = true">导入</el-button>
+            <el-button type="primary" @click="showAddDialog">
+              <el-icon><Plus /></el-icon>
+              添加设备
+            </el-button>
+          </div>
         </div>
       </template>
 
@@ -25,10 +29,19 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-select v-model="statusFilter" placeholder="状态筛选" clearable style="width: 150px; margin-left: 10px">
+        <el-select v-model="statusFilter" placeholder="状态筛选" clearable style="width: 130px; margin-left: 10px">
           <el-option label="在线" value="online" />
           <el-option label="离线" value="offline" />
         </el-select>
+        <el-select v-model="productFilter" placeholder="产品筛选" clearable filterable style="width: 160px; margin-left: 10px">
+          <el-option v-for="p in products" :key="p.product_id" :label="p.name" :value="p.product_id" />
+        </el-select>
+        <el-input
+          v-model="gatewayFilter"
+          placeholder="网关ID筛选"
+          clearable
+          style="width: 150px; margin-left: 10px"
+        />
         <el-button type="primary" @click="fetchDevices" style="margin-left: 10px">
           <el-icon><Search /></el-icon>
           搜索
@@ -39,7 +52,10 @@
       <el-table :data="filteredDevices" style="width: 100%" v-loading="loading" stripe>
         <el-table-column prop="device_id" label="设备ID" width="180" />
         <el-table-column prop="device_name" label="设备名称" />
-        <el-table-column prop="product_id" label="产品ID" width="150" />
+        <el-table-column prop="product_id" label="产品ID" width="140" />
+        <el-table-column prop="gateway_id" label="网关" width="120">
+          <template #default="{ row }">{{ row.gateway_id || '-' }}</template>
+        </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="row.status === 'online' ? 'success' : 'info'">
@@ -62,16 +78,16 @@
             <el-button type="primary" size="small" @click="$router.push(`/devices/${row.device_id}`)">
               详情
             </el-button>
-            <el-button type="primary" size="small" @click="showEditDialog(row)">
+            <el-button type="primary" size="small" @click="showEditDialog(row)" v-if="canAdm(row)">
               编辑
             </el-button>
-            <el-button type="success" size="small" @click="showControlDialog(row)">
+            <el-button type="success" size="small" @click="showControlDialog(row)" v-if="canOp(row)">
               控制
             </el-button>
-            <el-button type="warning" size="small" @click="showUpgradeDialog(row)">
+            <el-button type="warning" size="small" @click="showUpgradeDialog(row)" v-if="canOp(row)">
               升级
             </el-button>
-            <el-button type="danger" size="small" @click="handleDelete(row)">
+            <el-button type="danger" size="small" @click="handleDelete(row)" v-if="canAdm(row)">
               删除
             </el-button>
           </template>
@@ -93,10 +109,18 @@
           <el-input v-model="deviceForm.device_name" placeholder="请输入设备名称" />
         </el-form-item>
         <el-form-item label="产品ID" prop="product_id">
-          <el-input v-model="deviceForm.product_id" placeholder="请输入产品ID" />
+          <el-select v-model="deviceForm.product_id" filterable allow-create style="width: 100%" placeholder="选择或输入产品ID">
+            <el-option v-for="p in products" :key="p.product_id" :label="`${p.name} (${p.product_id})`" :value="p.product_id" />
+          </el-select>
         </el-form-item>
         <el-form-item label="所属网关">
           <el-input v-model="deviceForm.gateway_id" placeholder="子设备填写网关 device_id，可空" />
+        </el-form-item>
+        <el-form-item label="连接ID">
+          <el-input v-model="deviceForm.link_id" placeholder="绑定连接管理中的 link_id，Modbus 采集用" />
+        </el-form-item>
+        <el-form-item label="从站地址">
+          <el-input-number v-model="deviceForm.slave" :min="1" :max="247" />
         </el-form-item>
         <el-form-item label="设备密钥" prop="device_secret" v-if="!isEditing">
           <el-input v-model="deviceForm.device_secret" placeholder="请输入设备密钥" />
@@ -159,28 +183,52 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 导入设备 -->
+    <el-dialog v-model="importDialogVisible" title="导入设备" width="560px">
+      <el-alert type="info" :closable="false" title="JSON 格式：[{ device_id, device_name, product_id, gateway_id? }]" style="margin-bottom: 12px" />
+      <el-input v-model="importJson" type="textarea" :rows="10" placeholder='[{"device_id":"d001","device_name":"设备1","product_id":"p001"}]' />
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importLoading" @click="handleImport">导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDevices, getDevice, createDevice, updateDevice, deleteDevice, sendCommand } from '@/api/modules/devices'
+import { useAuthStore } from '@/store/modules/auth'
+import { getDevices, createDevice, updateDevice, deleteDevice, sendCommand, exportDevices, importDevices } from '@/api/modules/devices'
 import { getFirmwares, createUpgradeTask } from '@/api/modules/firmware'
+import { getProducts } from '@/api/modules/products'
 
-// 状态
+const route = useRoute()
+const authStore = useAuthStore()
+const roleRank = { viewer: 1, operator: 2, admin: 3 }
+const roleOf = (row) => authStore.deviceRole(row.device_id, row.product_id)
+const canOp = (row) => authStore.isSuperuser || (roleRank[roleOf(row)] || 0) >= 2
+const canAdm = (row) => authStore.isSuperuser || roleOf(row) === 'admin'
 const loading = ref(false)
 const submitLoading = ref(false)
 const controlLoading = ref(false)
 const upgradeLoading = ref(false)
 const devices = ref([])
+const products = ref([])
 const searchKeyword = ref('')
 const statusFilter = ref('')
+const productFilter = ref(route.query.product_id || '')
+const gatewayFilter = ref(route.query.gateway_id || '')
 
 // 对话框状态
 const deviceDialogVisible = ref(false)
 const controlDialogVisible = ref(false)
 const upgradeDialogVisible = ref(false)
+const importDialogVisible = ref(false)
+const importLoading = ref(false)
+const importJson = ref('')
 const isEditing = ref(false)
 const selectedDevice = ref(null)
 const commandJson = ref('')
@@ -194,6 +242,8 @@ const deviceForm = reactive({
   device_name: '',
   product_id: '',
   gateway_id: '',
+  link_id: '',
+  slave: 1,
   device_secret: ''
 })
 
@@ -222,6 +272,12 @@ const filteredDevices = computed(() => {
   if (statusFilter.value) {
     result = result.filter(d => d.status === statusFilter.value)
   }
+  if (productFilter.value) {
+    result = result.filter(d => d.product_id === productFilter.value)
+  }
+  if (gatewayFilter.value) {
+    result = result.filter(d => d.gateway_id === gatewayFilter.value)
+  }
   return result
 })
 
@@ -235,7 +291,9 @@ const formatTime = (time) => {
 const fetchDevices = async () => {
   loading.value = true
   try {
-    devices.value = await getDevices()
+    const list = await getDevices(productFilter.value ? { product_id: productFilter.value } : {})
+    devices.value = Array.isArray(list) ? list : (list?.devices || [])
+    products.value = await getProducts().catch(() => [])
   } catch (error) {
     console.error('获取设备列表失败:', error)
     ElMessage.error('获取设备列表失败')
@@ -252,6 +310,8 @@ const showAddDialog = () => {
     device_name: '',
     product_id: '',
     gateway_id: '',
+    link_id: '',
+    slave: 1,
     device_secret: ''
   })
   deviceDialogVisible.value = true
@@ -266,6 +326,8 @@ const showEditDialog = (device) => {
     device_name: device.device_name,
     product_id: device.product_id,
     gateway_id: device.gateway_id || '',
+    link_id: device.link_id || '',
+    slave: device.device_metadata?.slave || 1,
     device_secret: ''
   })
   deviceDialogVisible.value = true
@@ -282,11 +344,20 @@ const handleDeviceSubmit = async () => {
         if (isEditing.value) {
           await updateDevice(selectedDevice.value.device_id, {
             device_name: deviceForm.device_name,
-            gateway_id: deviceForm.gateway_id || null
+            gateway_id: deviceForm.gateway_id || null,
+            link_id: deviceForm.link_id || null,
+            device_metadata: { slave: deviceForm.slave }
           })
           ElMessage.success('设备更新成功')
         } else {
-          await createDevice(deviceForm)
+          await createDevice({
+            device_id: deviceForm.device_id,
+            device_name: deviceForm.device_name,
+            product_id: deviceForm.product_id,
+            gateway_id: deviceForm.gateway_id || null,
+            link_id: deviceForm.link_id || null,
+            device_metadata: { slave: deviceForm.slave }
+          })
           ElMessage.success('设备添加成功')
         }
         deviceDialogVisible.value = false
@@ -394,6 +465,44 @@ const handleUpgrade = async () => {
   }
 }
 
+const handleExport = async () => {
+  try {
+    const params = productFilter.value ? { product_id: productFilter.value } : {}
+    const data = await exportDevices(params)
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `devices_export_${Date.now()}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(`已导出 ${data.count || 0} 台设备`)
+  } catch {
+    ElMessage.error('导出失败')
+  }
+}
+
+const handleImport = async () => {
+  importLoading.value = true
+  try {
+    const parsed = JSON.parse(importJson.value)
+    const list = Array.isArray(parsed) ? parsed : (parsed.devices || [])
+    if (!list.length) {
+      ElMessage.warning('没有可导入的设备')
+      return
+    }
+    const res = await importDevices(list)
+    ElMessage.success(`成功 ${res.created_count} 台，跳过 ${res.skipped?.length || 0} 台`)
+    importDialogVisible.value = false
+    importJson.value = ''
+    await fetchDevices()
+  } catch (e) {
+    ElMessage.error(e instanceof SyntaxError ? 'JSON 格式错误' : '导入失败')
+  } finally {
+    importLoading.value = false
+  }
+}
+
 onMounted(() => {
   fetchDevices()
 })
@@ -409,6 +518,7 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
 }
+.header-actions { display: flex; gap: 8px; align-items: center; }
 
 .search-bar {
   margin-bottom: 20px;

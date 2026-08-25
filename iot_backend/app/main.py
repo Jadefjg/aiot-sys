@@ -31,10 +31,23 @@ async def lifespan(app: FastAPI):
         status = "✓" if success else "✗"
         print(f"{status} {protocol.upper()} service: {'Started' if success else 'Failed'}")
 
+    try:
+        from app.services.job_scheduler import job_scheduler
+        job_scheduler.start()
+        print("✓ Job scheduler: Started")
+    except Exception as e:
+        print(f"✗ Job scheduler: {e}")
+
     yield
 
     # 关闭时执行
     print("Shutting down IOT Backend Service...")
+
+    try:
+        from app.services.job_scheduler import job_scheduler
+        job_scheduler.stop()
+    except Exception:
+        pass
 
     # 停止所有协议服务
     shutdown_results = await protocol_manager.stop_all()
@@ -48,7 +61,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.PROJECT_VERSION,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",  # "/api/v1/openapi.json"
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # 设置 CORS
@@ -73,40 +86,43 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """
-    健康检查端点
-    监控所有协议服务的连接状态
-    """
-    # 获取所有协议服务状态
-    protocol_statuses = protocol_manager.get_service_status()
+    """健康检查：进程存活即 healthy，协议详情仅作附加信息"""
+    from datetime import datetime, timezone
 
-    # 计算总体状态
-    all_connected = all(
-        status.get("connected", False)
-        for status in protocol_statuses
-        if status
-    )
+    try:
+        protocol_statuses = protocol_manager.get_service_status() or []
+    except Exception as e:
+        return {
+            "status": "ok",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "protocols": {},
+            "warning": str(e),
+        }
 
-    # 构建健康检查响应
-    response = {
-        "status": "healthy" if all_connected else "degraded",
-        "timestamp": "2024-01-01T00:00:00Z",
-        "protocols": {}
-    }
-
-    # 添加每个协议的详细信息
+    protocols = {}
     for status in protocol_statuses:
-        if status:
-            protocol_name = status["protocol"]
-            response["protocols"][protocol_name] = {
-                "connected": status.get("connected", False),
-                "device_count": status.get("device_count", 0)
-            }
+        if not status:
+            continue
+        protocols[status["protocol"]] = {
+            "connected": status.get("connected", False),
+            "device_count": status.get("device_count", 0),
+        }
 
-    # 添加总体连接状态
-    response["all_protocols_connected"] = all_connected
+    from app.services.timeseries import timeseries
 
-    return response
+    influx = {"enabled": timeseries.enabled, "connected": False}
+    if timeseries.enabled:
+        influx["connected"] = timeseries.ping()
+
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "protocols": protocols,
+        "all_protocols_connected": all(
+            p.get("connected") for p in protocols.values()
+        ) if protocols else False,
+        "influx": influx,
+    }
 
 if __name__ == "__main__":
     import uvicorn

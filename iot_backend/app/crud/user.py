@@ -199,6 +199,26 @@ class CRUDRole:
             RolePermission.role_id == role_id
         ).all()
 
+    def set_role_permissions(
+        self, db: Session, role_id: int, permission_ids: List[int]
+    ) -> List[Permission]:
+        """批量设置角色权限（覆盖式同步）"""
+        current_ids = {
+            row[0]
+            for row in db.query(RolePermission.permission_id).filter(
+                RolePermission.role_id == role_id
+            ).all()
+        }
+        target_ids = set(permission_ids)
+
+        for permission_id in current_ids - target_ids:
+            self.remove_permission(db, role_id=role_id, permission_id=permission_id)
+
+        for permission_id in target_ids - current_ids:
+            self.assign_permission(db, role_id=role_id, permission_id=permission_id)
+
+        return self.get_role_permissions(db, role_id=role_id)
+
 
 class CRUDPermission:
     def get(self, db: Session, id: int) -> Optional[Permission]:

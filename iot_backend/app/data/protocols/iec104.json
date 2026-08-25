@@ -1,0 +1,17 @@
+{
+  "name": "iec104",
+  "title": "IEC 60870-5-104",
+  "description": "电力系统远程控制和监视通信协议。",
+  "version": "1.0",
+  "transport": "tcp",
+  "default_port": 2404,
+  "implemented": true,
+  "topics": [
+    "protocol/iec104/{linker}/{link_id}/open",
+    "protocol/iec104/{linker}/{link_id}/sync"
+  ],
+  "fields": [
+    { "name": "common_address", "label": "公共地址", "type": "number", "default": 1 },
+    { "name": "originator", "label": "源地址", "type": "number", "default": 0 }
+  ]
+}

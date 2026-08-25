@@ -102,7 +102,7 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getRoles, getRole, createRole, updateRole, deleteRole, assignPermissions } from '@/api/modules/roles'
+import { getRoles, getRole, createRole, updateRole, deleteRole, assignPermissions, getRolePermissions } from '@/api/modules/roles'
 import { getPermissions } from '@/api/modules/permissions'
 
 // 状态
@@ -222,10 +222,14 @@ const handleDelete = async (role) => {
 // 显示权限分配对话框
 const showPermissionDialog = async (role) => {
   selectedRole.value = role
-  selectedPermissionIds.value = role.permissions?.map(p => p.id) || []
 
   try {
-    availablePermissions.value = await getPermissions()
+    const [permissions, rolePermissions] = await Promise.all([
+      getPermissions(),
+      getRolePermissions(role.id)
+    ])
+    availablePermissions.value = permissions
+    selectedPermissionIds.value = rolePermissions.map(p => p.id)
     permissionDialogVisible.value = true
   } catch (error) {
     console.error('获取权限列表失败:', error)

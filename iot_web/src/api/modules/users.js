@@ -22,7 +22,7 @@ export const updateUser = (userId, data) => {
 
 // 更新当前用户
 export const updateCurrentUser = (data) => {
-  return api.put('/users/me', data)
+  return api.put('/users/me', null, { params: data })
 }
 
 // 获取当前用户
