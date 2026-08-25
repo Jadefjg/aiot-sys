@@ -1,14 +1,14 @@
 """
 用户CRUD模块单元测试
-测试 app/crud/user.py 中的 CRUDUser, CRUDRole, CRUDPermission 类
+测试 app/crud/user.py 中的 CRUDUser, CRUDRole 类
 """
 import pytest
 from unittest.mock import MagicMock, patch
 from sqlalchemy.orm import Session
 
-from app.crud.user import CRUDUser, CRUDRole, CRUDPermission
-from app.db.models.user import User, Role, Permission, UserRole, RolePermission
-from app.schemas.user import UserCreate, UserUpdate, RoleCreate, PermissionCreate
+from app.crud.user import CRUDUser, CRUDRole
+from app.db.models.user import User, Role, UserRole, RolePermission
+from app.schemas.user import UserCreate, UserUpdate, RoleCreate
 
 
 class TestCRUDUser:
@@ -406,79 +406,6 @@ class TestCRUDRole:
         # 验证结果
         assert result == mock_role_permission
         mock_db.add.assert_not_called()
-
-
-class TestCRUDPermission:
-    """CRUDPermission 类的单元测试"""
-
-    @pytest.fixture
-    def crud_permission(self):
-        """创建 CRUDPermission 实例"""
-        return CRUDPermission()
-
-    @pytest.fixture
-    def mock_db(self):
-        """创建模拟的数据库 Session"""
-        return MagicMock(spec=Session)
-
-    @pytest.fixture
-    def mock_permission(self):
-        """创建模拟的 Permission 对象"""
-        permission = MagicMock(spec=Permission)
-        permission.id = 1
-        permission.name = "device:read"
-        permission.description = "Read device information"
-        return permission
-
-    def test_get_permission_by_id(self, crud_permission, mock_db, mock_permission):
-        """测试通过ID获取权限"""
-        # 配置模拟
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_permission
-
-        # 执行测试
-        result = crud_permission.get(mock_db, id=1)
-
-        # 验证结果
-        assert result == mock_permission
-
-    def test_get_permission_by_name(self, crud_permission, mock_db, mock_permission):
-        """测试通过名称获取权限"""
-        # 配置模拟
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_permission
-
-        # 执行测试
-        result = crud_permission.get_by_name(mock_db, name="device:read")
-
-        # 验证结果
-        assert result == mock_permission
-        assert result.name == "device:read"
-
-    def test_get_multi_permissions(self, crud_permission, mock_db, mock_permission):
-        """测试获取权限列表"""
-        # 配置模拟
-        mock_permissions = [mock_permission, mock_permission]
-        mock_db.query.return_value.offset.return_value.limit.return_value.all.return_value = mock_permissions
-
-        # 执行测试
-        result = crud_permission.get_multi(mock_db, skip=0, limit=10)
-
-        # 验证结果
-        assert len(result) == 2
-
-    def test_create_permission(self, crud_permission, mock_db):
-        """测试创建权限"""
-        # 配置模拟
-        permission_data = PermissionCreate(name="device:write", description="Write device information")
-        mock_db.add = MagicMock()
-        mock_db.commit = MagicMock()
-        mock_db.refresh = MagicMock()
-
-        # 执行测试
-        result = crud_permission.create(mock_db, obj_in=permission_data)
-
-        # 验证结果
-        mock_db.add.assert_called_once()
-        mock_db.commit.assert_called_once()
 
 
 if __name__ == "__main__":

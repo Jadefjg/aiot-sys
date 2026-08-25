@@ -4,7 +4,7 @@
 
 ## 测试文件说明
 
-- `test_crud_user.py` - 用户CRUD模块测试（CRUDUser, CRUDRole, CRUDPermission）
+- `test_crud_user.py` - 用户CRUD模块测试（CRUDUser, CRUDRole）
 - `test_crud_device.py` - 设备CRUD模块测试（CRUDDevice, CRUDDeviceData, CRUDDeviceCommand）
 - `test_crud_permission.py` - 权限CRUD模块测试（CRUDPermission）
 - `test_core_security.py` - 安全模块测试（密码哈希、JWT令牌）

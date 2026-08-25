@@ -66,18 +66,3 @@ class RoleWithPermissions(Role):
 class RolePermissionsAssign(BaseModel):
     """批量分配角色权限"""
     permission_ids: List[int] = []
-
-class PermissionBase(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-
-class PermissionCreate(PermissionBase):
-    pass
-
-
-class Permission(PermissionBase):
-    id: int
-
-    class Config:
-        from_attributes = True

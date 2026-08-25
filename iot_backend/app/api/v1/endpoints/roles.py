@@ -9,7 +9,7 @@ from app.db.session import get_db
 from app.db.models.user import User
 from app.schemas.user import (
     Role, RoleCreate, RoleUpdate, RoleWithPermissions,
-    RolePermissionsAssign, Permission,
+    RolePermissionsAssign,
 )
 from app.schemas.permission import Permission as PermissionOut
 from app.crud.user import role_crud

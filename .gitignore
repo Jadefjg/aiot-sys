@@ -11,4 +11,19 @@ Thumbs.db
 *.swp
 *.swo
 
-noede_modules/
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+.env
+.env.bak
+.env.local
+
+# Node / frontend build
+node_modules/
+iot_web/dist/
+
+# Docker / local data
+*.log

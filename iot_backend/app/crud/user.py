@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.db.models.user import User, Role, Permission, UserRole, RolePermission
-from app.schemas.user import UserCreate, UserUpdate, RoleCreate,PermissionCreate
+from app.schemas.user import UserCreate, UserUpdate, RoleCreate
 from app.core.security import get_password_hash, verify_password
 
 
@@ -220,24 +220,6 @@ class CRUDRole:
         return self.get_role_permissions(db, role_id=role_id)
 
 
-class CRUDPermission:
-    def get(self, db: Session, id: int) -> Optional[Permission]:
-        return db.query(Permission).filter(Permission.id == id).first()
-
-    def get_by_name(self, db: Session, name: str) -> Optional[Permission]:
-        return db.query(Permission).filter(Permission.name == name).first()
-
-    def get_multi(self, db: Session, skip: int = 0, limit: int = 100) -> List[Permission]:
-        return db.query(Permission).offset(skip).limit(limit).all()
-
-    def create(self, db: Session, obj_in: PermissionCreate) -> Permission:
-        db_obj = Permission(**obj_in.model_dump())
-        db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
-        return db_obj
-
 # 实例化CRUD对象
 user_crud = CRUDUser()
 role_crud = CRUDRole()
-permission_crud = CRUDPermission()
