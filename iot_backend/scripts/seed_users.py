@@ -15,6 +15,7 @@ from app.schemas.user import UserCreate
 
 DEFAULT_USERS = [
     ("admin", "admin123", "admin@example.com"),
+    ("superadmin", "admin123", "superadmin@example.com"),
     ("feng", "feng123", "feng@example.com"),
 ]
 

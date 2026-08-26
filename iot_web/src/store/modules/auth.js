@@ -41,7 +41,12 @@ export const useAuthStore = defineStore('auth', {
         const response = await loginApi(username, password)
         this.token = response.access_token
         localStorage.setItem('token', response.access_token)
-        await this.fetchUser()
+        // 登录后拉取资料失败不应清掉刚写入的 token（否则会像登录被取消/立刻退回）
+        try {
+          await this.fetchUser({ logoutOnError: false })
+        } catch (error) {
+          console.error('登录后获取用户信息失败:', error)
+        }
         return true
       } catch (error) {
         const status = error.response?.status
@@ -55,7 +60,7 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    async fetchUser() {
+    async fetchUser({ logoutOnError = true } = {}) {
       if (!this.token) return
       try {
         const { getMyPermissions } = await import('@/api/modules/users')
@@ -66,7 +71,10 @@ export const useAuthStore = defineStore('auth', {
         await this.fetchAccess()
       } catch (error) {
         console.error('获取用户信息失败:', error)
-        this.logout()
+        if (logoutOnError) {
+          this.logout()
+        }
+        throw error
       }
     },
 

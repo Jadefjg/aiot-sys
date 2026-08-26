@@ -128,15 +128,42 @@
         </p>
       </div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        @submit.prevent="handleLogin"
+      >
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" prefix-icon="User" size="large" />
+          <el-input
+            v-model="form.username"
+            placeholder="用户名（默认 admin）"
+            prefix-icon="User"
+            size="large"
+            autocomplete="username"
+          />
         </el-form-item>
         <el-form-item prop="password">
-          <el-input v-model="form.password" type="password" placeholder="密码" prefix-icon="Lock" size="large" show-password @keyup.enter="handleLogin" />
+          <el-input
+            v-model="form.password"
+            type="password"
+            placeholder="密码（默认 admin123）"
+            prefix-icon="Lock"
+            size="large"
+            show-password
+            autocomplete="current-password"
+            @keyup.enter="handleLogin"
+          />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="large" :loading="loading" style="width: 100%" @click="handleLogin">
+          <el-button
+            type="primary"
+            native-type="button"
+            size="large"
+            :loading="loading"
+            style="width: 100%"
+            @click.prevent="handleLogin"
+          >
             <span class="btn-text">登 录</span>
           </el-button>
         </el-form-item>
@@ -144,6 +171,7 @@
       <div class="register-link">
         还没有账号？<router-link to="/register">立即注册</router-link>
       </div>
+      <p class="login-hint">默认管理员：admin / admin123</p>
     </div>
   </div>
 </template>
@@ -268,26 +296,30 @@ const getIconStyle = (n) => {
 }
 
 const handleLogin = async () => {
-  if (!formRef.value) return
+  if (!formRef.value || loading.value) return
 
-  await formRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        const success = await authStore.login(form.username, form.password)
-        if (success) {
-          ElMessage.success('登录成功')
-          router.push('/dashboard')
-        } else {
-          ElMessage.error('用户名或密码错误')
-        }
-      } catch (error) {
-        ElMessage.error('登录失败，请稍后重试')
-      } finally {
-        loading.value = false
-      }
+  try {
+    const valid = await formRef.value.validate()
+    if (!valid) return
+  } catch {
+    return
+  }
+
+  loading.value = true
+  try {
+    const success = await authStore.login(form.username.trim(), form.password)
+    if (success) {
+      ElMessage.success('登录成功')
+      await router.replace('/dashboard')
+    } else {
+      ElMessage.error('用户名或密码错误')
     }
-  })
+  } catch (error) {
+    const detail = error?.response?.data?.detail
+    ElMessage.error(typeof detail === 'string' ? detail : '登录失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -581,34 +613,67 @@ const handleLogin = async () => {
   }
 }
 
-/* 表单样式 */
+/* 表单样式：深色输入框，覆盖 Element Plus 默认白底与浏览器自动填充白底 */
+:deep(.el-form-item) {
+  --el-input-bg-color: #0b1a2e;
+  --el-input-text-color: #e8f4ff;
+  --el-input-placeholder-color: rgba(180, 220, 255, 0.45);
+  --el-input-border-color: rgba(0, 212, 255, 0.28);
+  --el-input-hover-border-color: rgba(0, 212, 255, 0.55);
+  --el-input-focus-border-color: #00d4ff;
+  --el-fill-color-blank: #0b1a2e;
+}
+
 :deep(.el-input__wrapper) {
-  background: rgba(0, 20, 40, 0.6);
-  border: 1px solid rgba(0, 212, 255, 0.3);
+  background-color: #0b1a2e !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.28) inset !important;
   border-radius: 10px;
   transition: all 0.3s ease;
 }
 
 :deep(.el-input__wrapper:hover) {
-  border-color: rgba(0, 212, 255, 0.6);
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+  background-color: #0e2238 !important;
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.55) inset, 0 0 16px rgba(0, 212, 255, 0.15) !important;
 }
 
 :deep(.el-input__wrapper.is-focus) {
-  border-color: #00d4ff;
-  box-shadow: 0 0 25px rgba(0, 212, 255, 0.4);
+  background-color: #102840 !important;
+  box-shadow: 0 0 0 1px #00d4ff inset, 0 0 22px rgba(0, 212, 255, 0.28) !important;
 }
 
 :deep(.el-input__inner) {
-  color: #fff;
+  color: #e8f4ff !important;
+  background-color: transparent !important;
+  -webkit-text-fill-color: #e8f4ff;
+  caret-color: #00d4ff;
 }
 
 :deep(.el-input__inner::placeholder) {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(180, 220, 255, 0.45);
+  -webkit-text-fill-color: rgba(180, 220, 255, 0.45);
 }
 
-:deep(.el-input__prefix) {
+:deep(.el-input__prefix),
+:deep(.el-input__suffix) {
   color: #00d4ff;
+}
+
+:deep(.el-input__prefix-inner),
+:deep(.el-input__suffix-inner) {
+  color: #00d4ff;
+}
+
+/* Chrome / Safari 自动填充白底覆盖为深蓝灰 */
+:deep(input.el-input__inner:-webkit-autofill),
+:deep(input.el-input__inner:-webkit-autofill:hover),
+:deep(input.el-input__inner:-webkit-autofill:focus),
+:deep(.el-input__wrapper:has(input:-webkit-autofill)) {
+  -webkit-text-fill-color: #e8f4ff !important;
+  caret-color: #00d4ff;
+  transition: background-color 99999s ease-out 0s;
+  box-shadow: 0 0 0 1000px #0b1a2e inset !important;
+  background-color: #0b1a2e !important;
 }
 
 :deep(.el-button--primary) {
@@ -666,5 +731,12 @@ const handleLogin = async () => {
 .register-link a:hover {
   color: #00ff88;
   text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+}
+
+.login-hint {
+  margin-top: 12px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 12px;
 }
 </style>
