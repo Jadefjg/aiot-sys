@@ -1,8 +1,10 @@
 from datetime import timedelta
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
+
 from app.core import security
 from app.core.config import settings
 from app.core.dependencies import get_current_active_user
@@ -13,35 +15,58 @@ from app.schemas.user import User
 
 router = APIRouter()
 
-@router.post("/login", response_model=Token)
-def login_for_access_token(
-    db: Session = Depends(get_db), form_data: OAuth2PasswordRequestForm =
-    Depends()
-    ) -> Any:
-    """
-    OAuth2 compatible token login, get an access token for future requests
-    """
-    user = user_crud.authenticate(
-        db, username=form_data.username, password=form_data.password
-    )
+
+def _issue_token(db: Session, username: str, password: str) -> dict:
+    """校验账号并签发 token；失败统一返回 401"""
+    username = (username or "").strip()
+    password = password or ""
+    user = user_crud.authenticate(db, username=username, password=password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    elif not user_crud.is_active(user):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user"
-        )
+    if not user_crud.is_active(user):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
-            "access_token": security.create_access_token(
-            data={"sub": user.username}, expires_delta=access_token_expires
-            ),
-            "token_type": "bearer",
-        }
+        "access_token": security.create_access_token(
+            data={"sub": user.username},
+            expires_delta=access_token_expires,
+        ),
+        "token_type": "bearer",
+    }
+
+
+@router.post("/login", response_model=Token)
+async def login_for_access_token(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> Any:
+    """
+    登录：兼容
+    - application/x-www-form-urlencoded（OAuth2 / 前端）
+    - application/json {"username","password"}
+    """
+    content_type = (request.headers.get("content-type") or "").lower()
+    username = ""
+    password = ""
+
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        if isinstance(body, dict):
+            username = str(body.get("username") or body.get("email") or "")
+            password = str(body.get("password") or "")
+    else:
+        form = await request.form()
+        username = str(form.get("username") or form.get("email") or "")
+        password = str(form.get("password") or "")
+
+    return _issue_token(db, username, password)
 
 
 @router.post("/token", response_model=Token)
@@ -50,10 +75,10 @@ def login_token_alias(
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> Any:
     """Swagger OAuth2 兼容别名"""
-    return login_for_access_token(db=db, form_data=form_data)
+    return _issue_token(db, form_data.username, form_data.password)
 
 
 @router.post("/test-token", response_model=User)
 def test_token(current_user: User = Depends(get_current_active_user)) -> Any:
-    """ Test access token """
+    """Test access token"""
     return current_user

@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { login as loginApi, getCurrentUser } from '@/api/modules/auth'
+import { getMyPermissions } from '@/api/modules/users'
+import { getMyAccess } from '@/api/modules/acl'
 
 function readCachedUser() {
   try {
@@ -37,11 +39,19 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     async login(username, password) {
       this.loading = true
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      this.token = null
+      this.user = null
+      this.permissions = []
+      this.access = { is_superuser: false, products: {}, devices: {} }
       try {
         const response = await loginApi(username, password)
+        if (!response?.access_token) {
+          return false
+        }
         this.token = response.access_token
         localStorage.setItem('token', response.access_token)
-        // 登录后拉取资料失败不应清掉刚写入的 token（否则会像登录被取消/立刻退回）
         try {
           await this.fetchUser({ logoutOnError: false })
         } catch (error) {
@@ -50,7 +60,6 @@ export const useAuthStore = defineStore('auth', {
         return true
       } catch (error) {
         const status = error.response?.status
-        // 401 才视为凭证错误；404/5xx 由全局拦截器提示
         if (status === 401) {
           return false
         }
@@ -63,7 +72,6 @@ export const useAuthStore = defineStore('auth', {
     async fetchUser({ logoutOnError = true } = {}) {
       if (!this.token) return
       try {
-        const { getMyPermissions } = await import('@/api/modules/users')
         const [user, permRes] = await Promise.all([getCurrentUser(), getMyPermissions()])
         this.user = user
         this.permissions = permRes?.permissions || []
@@ -81,7 +89,6 @@ export const useAuthStore = defineStore('auth', {
     async fetchAccess() {
       if (!this.token) return
       try {
-        const { getMyAccess } = await import('@/api/modules/acl')
         this.access = await getMyAccess()
       } catch {
         this.access = { is_superuser: this.isSuperuser, products: {}, devices: {} }

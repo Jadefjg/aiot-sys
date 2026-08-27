@@ -27,6 +27,15 @@ api.interceptors.request.use(
     if (config.data instanceof FormData) {
       delete config.headers['Content-Type']
     }
+    // 登录接口不带旧 Token，避免干扰
+    const isLogin = (config.url || '').includes('/auth/login')
+    if (isLogin) {
+      if (config.headers) {
+        delete config.headers.Authorization
+        delete config.headers.authorization
+      }
+      return config
+    }
     const token = localStorage.getItem('token')
     if (token) {
       config.headers.Authorization = `Bearer ${token}`

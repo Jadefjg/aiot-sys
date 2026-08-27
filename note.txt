@@ -1,0 +1,32 @@
+cd iot_backend
+source .venv/bin/activate
+pip install -r requirements.txt   # 可选，已装好
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+按顺序执行：
+# 1) 基础设施（Docker Desktop 需已打开）
+cd iot_backend
+docker compose up -d mysql_db redis_cache mqtt_broker
+
+# 2) 后端
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 3) 初始化账号（另开终端）
+cd iot_backend && source .venv/bin/activate
+python scripts/seed_users.py
+
+
+一键部署：
+cd /Users/mark/Documents/0Study/aiot-sys
+docker compose up -d --build
+docker compose ps
+
+
+常用运维：
+
+docker compose logs -f backend_app    # 看后端日志
+docker compose restart backend_app    # 重启后端
+docker compose down                   # 停止（保留数据）
+docker compose down -v                # 停止并清空数据卷

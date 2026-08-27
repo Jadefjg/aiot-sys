@@ -160,6 +160,8 @@ const router = createRouter({
   routes
 })
 
+const CHUNK_RELOAD_KEY = 'vite_chunk_reload'
+
 router.beforeEach(async (to, from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth !== false && !token) {
@@ -181,6 +183,23 @@ router.beforeEach(async (to, from, next) => {
     }
   }
   next()
+})
+
+// 部署后旧页面仍引用过期 chunk hash 时，整页刷新一次拉取新 index.html
+router.onError((error) => {
+  const msg = String(error?.message || error || '')
+  const isChunkError =
+    /Failed to fetch dynamically imported module|Loading chunk|Importing a module script failed/i.test(
+      msg
+    )
+  if (!isChunkError) return
+  if (sessionStorage.getItem(CHUNK_RELOAD_KEY)) return
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, '1')
+  window.location.reload()
+})
+
+router.afterEach(() => {
+  sessionStorage.removeItem(CHUNK_RELOAD_KEY)
 })
 
 export default router

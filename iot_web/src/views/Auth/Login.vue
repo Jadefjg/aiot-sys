@@ -171,7 +171,7 @@
       <div class="register-link">
         还没有账号？<router-link to="/register">立即注册</router-link>
       </div>
-      <p class="login-hint">默认管理员：admin / admin123</p>
+      <p class="login-hint">默认账号：admin / admin123　或　superadmin / admin123</p>
     </div>
   </div>
 </template>
@@ -307,16 +307,29 @@ const handleLogin = async () => {
 
   loading.value = true
   try {
-    const success = await authStore.login(form.username.trim(), form.password)
-    if (success) {
-      ElMessage.success('登录成功')
+    const username = form.username.trim()
+    const password = form.password
+    const success = await authStore.login(username, password)
+    if (!success) {
+      ElMessage.error('用户名或密码错误（可用 admin / admin123）')
+      return
+    }
+    ElMessage.success('登录成功')
+    // 登录已成功：路由懒加载失败时整页跳转，避免误报「登录失败」
+    try {
       await router.replace('/dashboard')
-    } else {
-      ElMessage.error('用户名或密码错误')
+    } catch (navErr) {
+      console.error('路由跳转失败，改为整页进入控制台:', navErr)
+      window.location.assign('/iot/dashboard')
     }
   } catch (error) {
+    const status = error?.response?.status
     const detail = error?.response?.data?.detail
-    ElMessage.error(typeof detail === 'string' ? detail : '登录失败，请稍后重试')
+    if (status === 401) {
+      ElMessage.error('用户名或密码错误（可用 admin / admin123）')
+    } else {
+      ElMessage.error(typeof detail === 'string' ? detail : '登录失败，请稍后重试')
+    }
   } finally {
     loading.value = false
   }
