@@ -21,13 +21,25 @@ services:
       - mysql_data:/var/lib/mysql
     ports:
       - "${MYSQL_PORT:-3306}:3306"
-    command: --default-authentication-plugin=mysql_native_password --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    # 低内存服务器优化，避免 OOM 后残留进程导致 ibdata1 锁冲突
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-buffer-pool-size=128M
+      - --performance-schema=OFF
+      - --max-connections=50
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
-      retries: 10
-      start_period: 30s
+      retries: 12
+      start_period: 60s
 
   redis_cache:
     image: redis:7-alpine
@@ -46,9 +58,9 @@ services:
     container_name: iot_mqtt_broker
     restart: unless-stopped
     ports:
-      - "1883:1883"
-      - "18084:8083"
-      - "18083:18083"
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-18084}:8083"
+      - "${MQTT_DASHBOARD_PORT:-18083}:18083"
     environment:
       EMQX_NAME: emqx
       EMQX_HOST: 127.0.0.1

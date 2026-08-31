@@ -9,10 +9,12 @@ Full-stack **IoT Device Management System** with dual deployment modes:
 - **Microservices**: 4 independent services with Kong API Gateway
 
 ```
-wf_iot/
-├── iot_backend/     # 后端代码 (FastAPI + 微服务)
-├── iot_web/         # 前端代码 (Vue 3)
-└── CLAUDE.md        # 项目文档
+aiot-sys/
+├── iot_backend/     # 后端 (FastAPI + 微服务)
+├── iot_web/         # 前端 (Vue 3)
+├── docker-compose.yml
+├── DOCKER.md        # 本地 Docker 快速启动
+└── 部署.md          # 阿里云生产部署
 ```
 
 Infrastructure: MySQL 8.0, Redis, EMQX (MQTT broker), Docker Compose
@@ -43,10 +45,11 @@ celery -A app.tasks.firmware_tasks.celery_app worker --loglevel=info
 
 ### Docker (Monolithic)
 ```bash
-cd iot_backend
-docker-compose up -d --build
-docker-compose logs -f backend_app
-docker-compose down
+# 仓库根目录（推荐）
+cp .env.example .env
+docker compose up -d --build
+docker compose logs -f backend_app
+docker compose down
 ```
 
 ### Microservices
@@ -142,7 +145,6 @@ Environment variables via `iot_backend/app/core/config.py`:
 - Branch naming: `feature/功能名`, `bugfix/问题描述`, `hotfix/紧急修复`
 
 **Frontend known issues (from iot_web/.cursorrules):**
-- Login.vue: `from`→`form`, `sumbit`→`submit`
 - DevicesManagement.vue: inconsistent function names (`addDevices` vs `addDevice`), missing parameters
 
 ## Critical Files
@@ -156,16 +158,19 @@ Environment variables via `iot_backend/app/core/config.py`:
 | `iot_backend/app/api/v1/api.py` | Router aggregation |
 | `iot_backend/proto/*.proto` | gRPC service definitions |
 | `iot_backend/services/` | Microservices code |
-| `iot_backend/docker-compose.microservices.yml` | Microservices orchestration |
+| `docker-compose.yml` | 单体全栈编排（根目录） |
+| `iot_backend/docker-compose.yml` | 仅后端开发辅助 |
+| `iot_backend/docker-compose.microservices.yml` | 微服务编排 |
 
 ## Docker Services (Monolithic)
 
 - `mysql_db` (3306) - MySQL
 - `redis_cache` (6379) - Redis
-- `mqtt_broker` (1883, 8083 WS, 8080 dashboard) - EMQX
+- `mqtt_broker` (1883, 18083 dashboard, 18084 WS) - EMQX
+- `influxdb` (8086) - 时序数据（可选）
 - `backend_app` (8000) - FastAPI
 - `celery_worker` - Async tasks
-- `frontend_app` / `nginx` - Vue SPA
+- `frontend_app` (HTTP_PORT，默认 80) - Vue SPA + Nginx
 
 ## Troubleshooting
 

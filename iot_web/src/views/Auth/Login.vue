@@ -137,7 +137,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
-            placeholder="用户名（默认 admin）"
+            placeholder="用户名"
             prefix-icon="User"
             size="large"
             autocomplete="username"
@@ -147,7 +147,7 @@
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="密码（默认 admin123）"
+            placeholder="密码"
             prefix-icon="Lock"
             size="large"
             show-password
@@ -171,7 +171,6 @@
       <div class="register-link">
         还没有账号？<router-link to="/register">立即注册</router-link>
       </div>
-      <p class="login-hint">默认账号：admin / admin123　或　superadmin / admin123</p>
     </div>
   </div>
 </template>
@@ -311,7 +310,7 @@ const handleLogin = async () => {
     const password = form.password
     const success = await authStore.login(username, password)
     if (!success) {
-      ElMessage.error('用户名或密码错误（可用 admin / admin123）')
+      ElMessage.error('用户名或密码错误')
       return
     }
     ElMessage.success('登录成功')
@@ -326,7 +325,7 @@ const handleLogin = async () => {
     const status = error?.response?.status
     const detail = error?.response?.data?.detail
     if (status === 401) {
-      ElMessage.error('用户名或密码错误（可用 admin / admin123）')
+      ElMessage.error('用户名或密码错误')
     } else {
       ElMessage.error(typeof detail === 'string' ? detail : '登录失败，请稍后重试')
     }
@@ -744,12 +743,5 @@ const handleLogin = async () => {
 .register-link a:hover {
   color: #00ff88;
   text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
-}
-
-.login-hint {
-  margin-top: 12px;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.35);
-  font-size: 12px;
 }
 </style>

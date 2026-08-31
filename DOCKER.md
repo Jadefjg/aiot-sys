@@ -12,7 +12,7 @@ frontend_app (Nginx)
   └─ /docs     → OpenAPI
         │
         ▼
-backend_app (FastAPI) ──► mysql_db / redis_cache / mqtt_broker
+backend_app (FastAPI) ──► mysql_db / redis_cache / mqtt_broker / influxdb
 celery_worker           ──► redis_cache / mysql_db
 ```
 
@@ -34,6 +34,8 @@ docker compose logs -f backend_app
 
 ## 访问地址
 
+端口由 `.env` 中 `HTTP_PORT` 控制（`.env.example` 默认为 `8080`）。以下示例以 `8080` 为例：
+
 | 服务 | URL |
 |------|-----|
 | 前端控制台 | http://localhost:8080/iot/ |
@@ -42,6 +44,7 @@ docker compose logs -f backend_app
 | 健康检查 | http://localhost:8080/health |
 | EMQX Dashboard | http://localhost:18083 |
 | MQTT TCP | localhost:1883 |
+| InfluxDB | http://localhost:8086 |
 
 默认账号（容器启动时自动 seed）：
 

@@ -10,6 +10,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+**/.claude/
 
 # Python
 __pycache__/
@@ -27,3 +28,9 @@ iot_web/dist/
 
 # Docker / local data
 *.log
+
+# 本地笔记与敏感信息（勿提交）
+ali.txt
+note.txt
+note.md
+note*.md

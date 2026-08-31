@@ -1,7 +1,7 @@
 # AIOT-SYS 架构分析
 
 > 全栈物联网平台：在设备管理 / OTA / RBAC 之上，叠加产品物模型、MQTT 属性总线、校验告警与远程控制，形成轻量数据中台形态。  
-> 文档基于当前仓库实现梳理（FastAPI + Vue），业务对标 `note01.md`（iot-master）核心主线。
+> 文档基于当前仓库实现梳理（FastAPI + Vue），业务对标 iot-master 核心主线。
 
 ---
 
@@ -32,7 +32,7 @@
 |------|----------|
 | 后端 | Python · FastAPI · SQLAlchemy · Alembic · JWT · Celery |
 | 前端 | Vue 3 · Vite · Pinia · Vue Router · Element Plus · Axios |
-| 基础设施 | MySQL 8 · Redis · EMQX · Docker Compose |
+| 基础设施 | MySQL 8 · Redis · EMQX · InfluxDB · Docker Compose |
 | 微服务 | Kong · auth / device / firmware / mqtt-gateway · gRPC + Redis 事件 |
 
 ### 微服务端口（参考）
@@ -114,7 +114,7 @@
 | 固件 OTA | 成熟 | 固件版本、升级任务、Celery 异步执行 |
 | 智能场景 | 部分 | Scene/Job CRUD；Binding/Script 仅模型；无执行引擎 |
 | 分组 | 已实现 | DeviceGroup API + `device.group_id`；前端无独立页 |
-| 历史数据 | 部分 | MySQL `device_data`；无 Influx 时序层 |
+| 历史数据 | 部分 | MySQL `device_data`；InfluxDB 已纳入 compose，业务查询层待完善 |
 | 连接 / 协议插件 | 部分 | MQTT 主链路；CoAP/AMQP 适配骨架；无 link/protocol 总线 |
 
 ---
@@ -187,7 +187,7 @@ UI/API POST /devices/{id}/write
 | 缺口 | 说明 |
 |------|------|
 | 连接器 / 协议插件总线 | 缺少 `link/...` 与 `protocol/modbus/...` 主题编排，无法像 iot-master 解耦串口/TCP/Modbus |
-| 时序历史 | 仅 MySQL `DeviceData`，无 Influx 等 measurement/tag 查询层 |
+| 时序历史 | InfluxDB 容器已部署；业务仍以 MySQL `DeviceData` 为主，measurement/tag 查询层待完善 |
 | 场景执行引擎 | Scene/Job 多为配置镜像；Binding/Script 缺 API；边缘侧未落地 |
 | 产品 MQTT 同步 | 物模型变更可写库，产品 config/model 主题契约未完整对齐插件生态 |
 | 插件化扩展 | 无 App 包、Table/Page DSL、内置 Broker、Lua/JS 边缘运行时 |
@@ -206,10 +206,10 @@ UI/API POST /devices/{id}/write
 | `iot_backend/app/db/models/product.py` | 产品与物模型 |
 | `iot_backend/app/db/models/device.py` | 设备实例 |
 | `iot_backend/app/db/models/smart.py` | 场景 / 定时 / 绑定 / 脚本 |
-| `iot_backend/docker-compose.yml` | 单体编排 |
+| `docker-compose.yml` | 单体全栈编排（根目录，推荐） |
+| `iot_backend/docker-compose.yml` | 仅后端开发辅助 |
 | `iot_backend/docker-compose.microservices.yml` | 微服务编排 |
 | `iot_web/src/router/index.js` | 前端路由 |
-| `note01.md` | iot-master 业务参考（技术栈不同） |
 
 ---
 
@@ -222,4 +222,4 @@ AIOT-SYS 当前形态可概括为：
 3. **以 Vue 管理台为控制面**，覆盖产品、设备详情、告警与场景配置；  
 4. **以 FastAPI 四层单体为主实现中台能力**，并保留 Kong 微服务拆分路径。
 
-与 `note01.md` 中的 iot-master 相比：核心「模型 → MQTT → 管理台」主线已落地；协议插件总线、时序库、场景真正执行与插件生态仍是后续扩展方向。
+与 iot-master 参考项目相比：核心「模型 → MQTT → 管理台」主线已落地；协议插件总线、时序库、场景真正执行与插件生态仍是后续扩展方向。

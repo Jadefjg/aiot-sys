@@ -174,8 +174,7 @@ iot_backend/
 ├── docker-compose.microservices.yml  # 微服务Docker编排
 ├── init-databases.sql                # 数据库初始化
 ├── kong/
-│   ├── kong.yml                      # Kong声明式配置
-│   └── kong.conf                     # Kong配置文件
+│   └── kong.yml                      # Kong声明式配置
 ├── proto/
 │   ├── auth.proto                    # Auth服务Proto
 │   ├── device.proto                  # Device服务Proto
