@@ -132,26 +132,38 @@
         ref="formRef"
         :model="form"
         :rules="rules"
+        autocomplete="off"
         @submit.prevent="handleLogin"
       >
+        <!-- 吸收浏览器自动填充，避免登录框带出已存账号 -->
+        <div class="autofill-trap" aria-hidden="true">
+          <input type="text" name="username" tabindex="-1" autocomplete="username" />
+          <input type="password" name="password" tabindex="-1" autocomplete="current-password" />
+        </div>
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
+            name="iot-login-user"
             placeholder="用户名"
             prefix-icon="User"
             size="large"
-            autocomplete="username"
+            autocomplete="off"
+            :readonly="lockAutofill"
+            @focus="unlockAutofill"
           />
         </el-form-item>
         <el-form-item prop="password">
           <el-input
             v-model="form.password"
+            name="iot-login-pass"
             type="password"
             placeholder="密码"
             prefix-icon="Lock"
             size="large"
             show-password
-            autocomplete="current-password"
+            autocomplete="off"
+            :readonly="lockAutofill"
+            @focus="unlockAutofill"
             @keyup.enter="handleLogin"
           />
         </el-form-item>
@@ -186,11 +198,21 @@ const authStore = useAuthStore()
 
 const formRef = ref(null)
 const loading = ref(false)
+const lockAutofill = ref(true)
 
 const form = reactive({
   username: '',
   password: ''
 })
+
+const unlockAutofill = () => {
+  lockAutofill.value = false
+}
+
+const clearAutofill = () => {
+  form.username = ''
+  form.password = ''
+}
 
 const rules = {
   username: [
@@ -208,6 +230,9 @@ const connectionLines = ref([])
 
 onMounted(() => {
   generateNeuralNetwork()
+  clearAutofill()
+  setTimeout(clearAutofill, 50)
+  setTimeout(clearAutofill, 300)
 })
 
 const generateNeuralNetwork = () => {
@@ -743,5 +768,15 @@ const handleLogin = async () => {
 .register-link a:hover {
   color: #00ff88;
   text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+}
+
+.autofill-trap {
+  position: absolute;
+  left: -9999px;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 </style>
