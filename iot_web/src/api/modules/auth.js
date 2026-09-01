@@ -42,3 +42,37 @@ export const login = async (username, password) => {
 export const testToken = () => api.post('/auth/test-token')
 
 export const getCurrentUser = () => api.get('/users/me')
+
+export const register = async (payload) => {
+  const response = await fetch('/api/v1/auth/register', {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      username: String(payload?.username || '').trim(),
+      email: payload?.email || undefined,
+      password: String(payload?.password || ''),
+    }),
+    credentials: 'same-origin',
+    cache: 'no-store',
+  })
+
+  let data = null
+  try {
+    data = await response.json()
+  } catch {
+    data = null
+  }
+
+  if (!response.ok) {
+    const error = new Error(
+      (data && (data.detail || data.message)) || `Register failed (${response.status})`
+    )
+    error.response = { status: response.status, data }
+    throw error
+  }
+
+  return data
+}

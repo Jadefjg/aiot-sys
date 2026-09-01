@@ -11,7 +11,7 @@ from app.core.dependencies import get_current_active_user
 from app.crud.user import user_crud
 from app.db.session import get_db
 from app.schemas.token import Token
-from app.schemas.user import User
+from app.schemas.user import User, UserCreate, UserRegister
 
 router = APIRouter()
 
@@ -82,3 +82,30 @@ def login_token_alias(
 def test_token(current_user: User = Depends(get_current_active_user)) -> Any:
     """Test access token"""
     return current_user
+
+
+@router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)
+def register_user(user_in: UserRegister, db: Session = Depends(get_db)) -> Any:
+    """公开注册普通账号，无需登录"""
+    username = (user_in.username or "").strip()
+    password = user_in.password or ""
+    if len(username) < 3 or len(username) > 20:
+        raise HTTPException(status_code=400, detail="用户名长度须为 3-20 个字符")
+    if len(password) < 6:
+        raise HTTPException(status_code=400, detail="密码长度不能少于 6 位")
+    if user_crud.get_user_by_username(db, username=username):
+        raise HTTPException(status_code=400, detail="用户名已被注册")
+    if user_in.email and user_crud.get_by_email(db, email=user_in.email):
+        raise HTTPException(status_code=400, detail="邮箱已被注册")
+    created = user_crud.create_user(
+        db,
+        obj_in=UserCreate(
+            username=username,
+            email=user_in.email,
+            password=password,
+            full_name=user_in.full_name,
+            is_active=True,
+            is_superuser=False,
+        ),
+    )
+    return created

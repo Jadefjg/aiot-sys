@@ -1,14 +1,10 @@
 <template>
   <div class="register-container">
+    <div class="glow-orb glow-1"></div>
+    <div class="glow-orb glow-2"></div>
     <div class="register-box">
       <h2>注册账号</h2>
-      <el-alert
-        title="本系统暂不支持公开注册，请联系管理员创建账号"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 16px"
-      />
+      <p class="subtitle">Artificial Intelligence of Things</p>
       <el-form
         ref="formRef"
         :model="form"
@@ -29,6 +25,7 @@
             placeholder="邮箱"
             prefix-icon="Message"
             size="large"
+            autocomplete="email"
           />
         </el-form-item>
         <el-form-item prop="password">
@@ -39,6 +36,7 @@
             prefix-icon="Lock"
             size="large"
             show-password
+            autocomplete="new-password"
           />
         </el-form-item>
         <el-form-item prop="confirmPassword">
@@ -49,17 +47,19 @@
             prefix-icon="Lock"
             size="large"
             show-password
+            autocomplete="new-password"
           />
         </el-form-item>
         <el-form-item>
           <el-button
             type="primary"
+            native-type="button"
             size="large"
             :loading="loading"
             style="width: 100%"
-            @click="handleRegister"
+            @click.prevent="handleRegister"
           >
-            注册
+            注 册
           </el-button>
         </el-form-item>
       </el-form>
@@ -73,14 +73,12 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { createUser } from '@/api/modules/users'
+import { register } from '@/api/modules/auth'
 import { ElMessage } from 'element-plus'
 
 const router = useRouter()
-
 const formRef = ref(null)
 const loading = ref(false)
-
 const form = reactive({
   username: '',
   email: '',
@@ -117,28 +115,27 @@ const rules = {
 
 const handleRegister = async () => {
   if (!formRef.value) return
-
   await formRef.value.validate(async (valid) => {
-    if (valid) {
-      loading.value = true
-      try {
-        await createUser({
-          username: form.username,
-          email: form.email,
-          password: form.password
-        })
-        ElMessage.success('注册成功，请登录')
-        router.push('/login')
-      } catch (error) {
-        const status = error.response?.status
-        if (status === 403) {
-          ElMessage.error('注册需要管理员权限，请联系管理员创建账号')
-        } else {
-          ElMessage.error('注册失败，用户名或邮箱可能已存在')
-        }
-      } finally {
-        loading.value = false
+    if (!valid) return
+    loading.value = true
+    try {
+      await register({
+        username: form.username,
+        email: form.email,
+        password: form.password
+      })
+      ElMessage.success('注册成功，请登录')
+      router.push('/login')
+    } catch (error) {
+      const status = error.response?.status
+      const detail = error.response?.data?.detail
+      if (status === 400 && typeof detail === 'string') {
+        ElMessage.error(detail)
+      } else {
+        ElMessage.error('注册失败，请稍后重试')
       }
+    } finally {
+      loading.value = false
     }
   })
 }
@@ -150,31 +147,145 @@ const handleRegister = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #0a0a1a 0%, #1a1a3a 30%, #0f1629 70%, #0a0a1a 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  pointer-events: none;
+}
+
+.glow-1 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(0, 212, 255, 0.4) 0%, transparent 70%);
+  top: -100px;
+  left: -100px;
+}
+
+.glow-2 {
+  width: 350px;
+  height: 350px;
+  background: radial-gradient(circle, rgba(0, 255, 136, 0.3) 0%, transparent 70%);
+  bottom: -50px;
+  right: -50px;
 }
 
 .register-box {
-  width: 400px;
+  width: 420px;
   padding: 40px;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  background: rgba(15, 20, 40, 0.85);
+  border-radius: 20px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 212, 255, 0.5);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  backdrop-filter: blur(20px);
+  position: relative;
+  z-index: 10;
 }
 
 .register-box h2 {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  margin-bottom: 8px;
   text-align: center;
-  margin-bottom: 30px;
-  color: #333;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+}
+
+.subtitle {
+  color: #00d4ff;
+  font-size: 12px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+:deep(.el-form-item) {
+  --el-input-bg-color: #0b1a2e;
+  --el-input-text-color: #e8f4ff;
+  --el-input-placeholder-color: rgba(180, 220, 255, 0.45);
+  --el-input-border-color: rgba(0, 212, 255, 0.28);
+  --el-input-hover-border-color: rgba(0, 212, 255, 0.55);
+  --el-input-focus-border-color: #00d4ff;
+  --el-fill-color-blank: #0b1a2e;
+}
+
+:deep(.el-input__wrapper) {
+  background-color: #0b1a2e !important;
+  background-image: none !important;
+  box-shadow: 0 0 0 1px rgba(0, 212, 255, 0.28) inset !important;
+  border-radius: 10px;
+}
+
+:deep(.el-form-item.is-error .el-input__wrapper) {
+  background-color: #0b1a2e !important;
+  box-shadow: 0 0 0 1px rgba(245, 108, 108, 0.7) inset !important;
+}
+
+:deep(.el-input__inner) {
+  color: #e8f4ff !important;
+  background-color: transparent !important;
+  -webkit-text-fill-color: #e8f4ff;
+  caret-color: #00d4ff;
+}
+
+:deep(.el-input__inner::placeholder) {
+  color: rgba(180, 220, 255, 0.45);
+  -webkit-text-fill-color: rgba(180, 220, 255, 0.45);
+}
+
+:deep(.el-input__prefix),
+:deep(.el-input__suffix),
+:deep(.el-input__prefix-inner),
+:deep(.el-input__suffix-inner) {
+  color: #00d4ff;
+}
+
+:deep(input.el-input__inner:-webkit-autofill),
+:deep(input.el-input__inner:-webkit-autofill:hover),
+:deep(input.el-input__inner:-webkit-autofill:focus),
+:deep(.el-input__wrapper:has(input:-webkit-autofill)) {
+  -webkit-text-fill-color: #e8f4ff !important;
+  caret-color: #00d4ff;
+  transition: background-color 99999s ease-out 0s;
+  box-shadow: 0 0 0 1000px #0b1a2e inset !important;
+  background-color: #0b1a2e !important;
+}
+
+:deep(.el-button--primary) {
+  background: linear-gradient(135deg, #00d4ff 0%, #00a0cc 50%, #0080aa 100%);
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  letter-spacing: 4px;
+}
+
+:deep(.el-button--primary:hover) {
+  background: linear-gradient(135deg, #00e5ff 0%, #00b8e6 50%, #0099cc 100%);
+  box-shadow: 0 10px 40px rgba(0, 212, 255, 0.5);
 }
 
 .login-link {
   text-align: center;
   margin-top: 20px;
-  color: #666;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 14px;
 }
 
 .login-link a {
-  color: #409eff;
+  color: #00d4ff;
   text-decoration: none;
+  font-weight: 500;
+}
+
+.login-link a:hover {
+  color: #00ff88;
+  text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
 }
 </style>

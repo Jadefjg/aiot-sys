@@ -28,8 +28,8 @@ api.interceptors.request.use(
       delete config.headers['Content-Type']
     }
     // 登录接口不带旧 Token，避免干扰
-    const isLogin = (config.url || '').includes('/auth/login')
-    if (isLogin) {
+    const isPublicAuth = /\/auth\/(login|register)/.test(config.url || '')
+    if (isPublicAuth) {
       if (config.headers) {
         delete config.headers.Authorization
         delete config.headers.authorization
@@ -45,7 +45,7 @@ api.interceptors.request.use(
   error => Promise.reject(error)
 )
 
-const isAuthLogin = (config) => (config?.url || '').includes('/auth/login')
+const isPublicAuth = (config) => /\/auth\/(login|register)/.test(config?.url || '')
 const RETRY_STATUS = [502, 503, 504]
 const MAX_GET_RETRIES = 4
 
@@ -78,7 +78,7 @@ api.interceptors.response.use(
       const detail = formatApiDetail(response.data?.detail)
       switch (response.status) {
         case 401:
-          if (isAuthLogin(config)) {
+          if (isPublicAuth(config)) {
             break
           }
           localStorage.removeItem('token')

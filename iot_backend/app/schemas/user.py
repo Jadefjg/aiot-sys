@@ -17,6 +17,14 @@ class UserCreate(UserBase):
     is_superuser: Optional[bool] = False
 
 
+class UserRegister(BaseModel):
+    """公开注册：不允许指定超级管理员等权限字段"""
+    username: str
+    password: str
+    email: Optional[EmailStr] = None
+    full_name: Optional[str] = None
+
+
 class UserUpdate(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None

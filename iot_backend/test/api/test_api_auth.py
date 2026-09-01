@@ -431,5 +431,82 @@ class TestAuthIntegration:
         # 这里可以添加更多集成测试逻辑
 
 
+class TestRegisterAPI:
+    """公开注册接口"""
+
+    @pytest.fixture
+    def client(self):
+        return TestClient(app)
+
+    @pytest.fixture
+    def db(self):
+        db = SessionLocal()
+        yield db
+        db.close()
+
+    def test_register_success(self, client, db):
+        username = "reguser_ok"
+        payload = {
+            "username": username,
+            "email": "reguser_ok@example.com",
+            "password": "secret123",
+        }
+        try:
+            response = client.post("/api/v1/auth/register", json=payload)
+            assert response.status_code == 201
+            body = response.json()
+            assert body["username"] == username
+            assert body["is_superuser"] is False
+            login = client.post(
+                "/api/v1/auth/login",
+                data={"username": username, "password": "secret123"},
+            )
+            assert login.status_code == 200
+        finally:
+            user = user_crud.get_user_by_username(db, username=username)
+            if user:
+                user_crud.delete(db, id=user.id)
+
+    def test_register_duplicate_username(self, client, db):
+        username = "reguser_dup"
+        payload = {
+            "username": username,
+            "email": "reguser_dup@example.com",
+            "password": "secret123",
+        }
+        try:
+            first = client.post("/api/v1/auth/register", json=payload)
+            assert first.status_code == 201
+            second = client.post(
+                "/api/v1/auth/register",
+                json={**payload, "email": "reguser_dup2@example.com"},
+            )
+            assert second.status_code == 400
+            assert "用户名" in second.json()["detail"]
+        finally:
+            user = user_crud.get_user_by_username(db, username=username)
+            if user:
+                user_crud.delete(db, id=user.id)
+
+    def test_register_cannot_escalate_superuser(self, client, db):
+        username = "reguser_priv"
+        try:
+            response = client.post(
+                "/api/v1/auth/register",
+                json={
+                    "username": username,
+                    "email": "reguser_priv@example.com",
+                    "password": "secret123",
+                    "is_superuser": True,
+                },
+            )
+            assert response.status_code == 201
+            assert response.json()["is_superuser"] is False
+        finally:
+            user = user_crud.get_user_by_username(db, username=username)
+            if user:
+                user_crud.delete(db, id=user.id)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
