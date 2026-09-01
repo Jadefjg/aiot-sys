@@ -64,7 +64,7 @@ def _defaults(module: str) -> Dict[str, Any]:
     if module == "broker":
         return {"enabled": True, "port": 1883, "ws_port": 8083}
     if module == "oem":
-        return {"brand_name": "IoT管理系统", "logo_url": "", "copyright": ""}
+        return {"brand_name": "AIOT管理系统", "logo_url": "", "copyright": ""}
     if module == "database":
         return {
             "host": settings.MYSQL_HOST,

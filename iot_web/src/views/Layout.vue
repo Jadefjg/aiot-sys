@@ -3,7 +3,7 @@
     <el-aside width="220px" class="aside">
       <div class="logo">
         <el-icon><Monitor /></el-icon>
-        <span>IoT管理系统</span>
+        <span>AIOT管理系统</span>
       </div>
       <el-menu
         :default-active="activeMenu"
