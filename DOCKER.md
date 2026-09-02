@@ -70,5 +70,6 @@ docker compose down -v
 ## 说明
 
 - 根目录 `docker-compose.yml` 为推荐的全栈部署入口。
+- 通过 `.env` 中 `COMPOSE_PROFILES` 切换模式：`local`（本机全栈）或 `shared`（阿里云共享中间件）。
 - `iot_backend/docker-compose.yml` 可用于仅启动后端相关服务（开发辅助）。
 - 微服务模式见 `iot_backend/docker-compose.microservices.yml`。

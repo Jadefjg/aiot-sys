@@ -206,7 +206,7 @@ UI/API POST /devices/{id}/write
 | `iot_backend/app/db/models/product.py` | 产品与物模型 |
 | `iot_backend/app/db/models/device.py` | 设备实例 |
 | `iot_backend/app/db/models/smart.py` | 场景 / 定时 / 绑定 / 脚本 |
-| `docker-compose.yml` | 单体全栈编排（根目录，推荐） |
+| `docker-compose.yml` | 单体全栈编排（`COMPOSE_PROFILES=local` / `shared`） |
 | `iot_backend/docker-compose.yml` | 仅后端开发辅助 |
 | `iot_backend/docker-compose.microservices.yml` | 微服务编排 |
 | `iot_web/src/router/index.js` | 前端路由 |

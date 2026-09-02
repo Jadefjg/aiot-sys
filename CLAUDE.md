@@ -158,7 +158,7 @@ Environment variables via `iot_backend/app/core/config.py`:
 | `iot_backend/app/api/v1/api.py` | Router aggregation |
 | `iot_backend/proto/*.proto` | gRPC service definitions |
 | `iot_backend/services/` | Microservices code |
-| `docker-compose.yml` | 单体全栈编排（根目录） |
+| `docker-compose.yml` | 单体全栈编排（`COMPOSE_PROFILES=local` / `shared`） |
 | `iot_backend/docker-compose.yml` | 仅后端开发辅助 |
 | `iot_backend/docker-compose.microservices.yml` | 微服务编排 |
 
