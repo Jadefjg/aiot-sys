@@ -122,7 +122,7 @@
             </g>
           </svg>
         </div>
-        <h2>AIoT 智能设备管理平台</h2>
+        <h2>AIOT 管理平台</h2>
         <p class="subtitle">
           <span class="typing-text">Artificial Intelligence of Things</span>
         </p>
