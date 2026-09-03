@@ -215,6 +215,12 @@ class MQTTService:
                 db,
                 DeviceDataCreate(device_id=device_id, data=data, data_type="event"),
             )
+            if isinstance(data, dict):
+                try:
+                    from app.services.media_service import record_event
+                    record_event(db, device_id, data)
+                except Exception as exc:
+                    logger.warning("media event skipped: %s", exc)
         finally:
             db.close()
 

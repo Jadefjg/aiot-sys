@@ -27,7 +27,7 @@ RUN grep -v '^bleak' requirements.txt > /tmp/requirements.docker.txt \
         -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com
 
 COPY . .
-RUN mkdir -p /app/firmware_storage \
+RUN mkdir -p /app/firmware_storage /app/media_storage \
     && chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 8000

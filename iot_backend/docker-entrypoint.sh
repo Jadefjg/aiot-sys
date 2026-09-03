@@ -36,4 +36,7 @@ PYTHONPATH=/app python scripts/seed_users.py || echo "[entrypoint] seed users sk
 echo "[entrypoint] seeding default products ..."
 PYTHONPATH=/app python scripts/seed_products.py || echo "[entrypoint] seed products skipped/failed"
 
+echo "[entrypoint] seeding glasses products ..."
+PYTHONPATH=/app python scripts/seed_glasses.py || echo "[entrypoint] seed glasses skipped/failed"
+
 exec "$@"

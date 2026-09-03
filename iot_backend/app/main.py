@@ -76,6 +76,16 @@ app.add_middleware(
 # 包含API路由
 app.include_router(api_router,prefix=settings.API_V1_STR) # prefix="/api/v1"
 
+try:
+    from pathlib import Path
+    from fastapi.staticfiles import StaticFiles
+
+    media_dir = Path(settings.MEDIA_UPLOAD_DIR)
+    media_dir.mkdir(parents=True, exist_ok=True)
+    app.mount("/media_files", StaticFiles(directory=str(media_dir)), name="media_files")
+except Exception:
+    pass
+
 @app.get("/")
 async def root():
     return {

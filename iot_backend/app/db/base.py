@@ -15,11 +15,12 @@ def import_models():
     from app.db.models.link import Link
     from app.db.models.channel import Channel, ChannelLog, DataRule, DeviceShadow
     from app.db.models.acl import ProductACL, DeviceACL
+    from app.db.models.media import DeviceMedia
     return (
         User, Role, Permission, UserRole, RolePermission,
         DeviceGroup, Device, DeviceData, DeviceCommand,
         Firmware, FirmwareUpgradeTask, Product, Alarm,
         Scene, Job, Binding, Script, Link,
         Channel, ChannelLog, DataRule, DeviceShadow,
-        ProductACL, DeviceACL,
+        ProductACL, DeviceACL, DeviceMedia,
     )

@@ -19,7 +19,7 @@ celery_app = Celery(
     "firmware_tasks",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.firmware_tasks"]
+    include=["app.tasks.firmware_tasks", "app.tasks.media_tasks"]
 )
 
 # Celery配置

@@ -148,6 +148,9 @@ services:
       CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis_cache:6379/0}
       FIRMWARE_UPLOAD_DIR: /app/firmware_storage
       FIRMWARE_BASE_URL: ${FIRMWARE_BASE_URL:-http://localhost/firmware_files}
+      MEDIA_UPLOAD_DIR: /app/media_storage
+      MEDIA_BASE_URL: ${MEDIA_BASE_URL:-http://localhost:8080/media_files}
+      MEDIA_AI_ENABLED: ${MEDIA_AI_ENABLED:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost,http://localhost:8080,http://127.0.0.1,http://127.0.0.1:8080}
       PROJECT_NAME: ${PROJECT_NAME:-IoT System}
       INFLUX_ENABLED: ${INFLUX_ENABLED:-true}
@@ -157,6 +160,7 @@ services:
       INFLUX_BUCKET: ${INFLUX_BUCKET:-telemetry}
     volumes:
       - firmware_storage:/app/firmware_storage
+      - media_storage:/app/media_storage
     depends_on:
       mysql_db:
         condition: service_healthy
@@ -194,6 +198,7 @@ services:
       <<: *backend_env
     volumes:
       - firmware_storage:/app/firmware_storage
+      - media_storage:/app/media_storage
     depends_on:
       mysql_db:
         condition: service_healthy
@@ -228,5 +233,6 @@ volumes:
   mysql_data:
   emqx_data:
   firmware_storage:
+  media_storage:
   influx_data:
   mosquitto_data:

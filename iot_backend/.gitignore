@@ -47,3 +47,4 @@ Thumbs.db
 
 # Firmware uploads (large binary files)
 firmware_storage/
+media_storage/

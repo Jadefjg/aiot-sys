@@ -9,6 +9,7 @@ from app.db.models.smart import Scene, Job, Binding, Script
 from app.db.models.link import Link
 from app.db.models.channel import Channel, ChannelLog, DataRule, DeviceShadow
 from app.db.models.acl import ProductACL, DeviceACL
+from app.db.models.media import DeviceMedia
 
 __all__ = [
     "User", "Role", "Permission", "UserRole", "RolePermission",
@@ -16,5 +17,5 @@ __all__ = [
     "Firmware", "FirmwareUpgradeTask", "Product", "Alarm",
     "Scene", "Job", "Binding", "Script", "Link",
     "Channel", "ChannelLog", "DataRule", "DeviceShadow",
-    "ProductACL", "DeviceACL",
+    "ProductACL", "DeviceACL", "DeviceMedia",
 ]

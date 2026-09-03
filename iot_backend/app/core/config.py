@@ -45,6 +45,9 @@ class Settings(BaseSettings):
     # 固件存储配置
     FIRMWARE_UPLOAD_DIR: str = "/app/firmware_storage"
     FIRMWARE_BASE_URL: str = "http://localhost/firmware_files"
+    MEDIA_UPLOAD_DIR: str = "/app/media_storage"
+    MEDIA_BASE_URL: str = "http://localhost/media_files"
+    MEDIA_AI_ENABLED: bool = True
 
     # 应用配置
     PROJECT_NAME: str = "IoT System"

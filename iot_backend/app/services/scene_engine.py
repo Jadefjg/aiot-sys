@@ -50,9 +50,12 @@ def _in_time_window(scene: Scene) -> bool:
     return True
 
 
-def _match_rule(rule: dict, device_id: str, values: Dict[str, Any]) -> bool:
+def _match_rule(rule: dict, device_id: str, values: Dict[str, Any], product_id: str = None) -> bool:
     target = rule.get("device_id")
     if target and target != device_id:
+        return False
+    want_product = rule.get("product_id")
+    if want_product and want_product != product_id:
         return False
     field = rule.get("property") or rule.get("field")
     if not field:
@@ -75,6 +78,7 @@ class SceneEngine:
 
     def __init__(self):
         self._echo_until = {}
+        self._scene_until = {}
         self._scenes = []
         self._bindings = []
         self._cache_at = 0.0
@@ -95,16 +99,23 @@ class SceneEngine:
             self._cache_at = now
 
     def _run_scenes(self, db: Session, device_id: str, values: dict) -> None:
+        device = device_crud.get_by_device_id(db, device_id)
+        product_id = device.product_id if device else None
+        now = time.time()
         for scene in self._scenes:
             if not scene.enabled or not _in_time_window(scene):
                 continue
+            cooldown_key = (scene.id, device_id)
+            if self._scene_until.get(cooldown_key, 0) > now:
+                continue
             triggers = scene.triggers or []
-            if triggers and not any(_match_rule(t, device_id, values) for t in triggers):
+            if triggers and not any(_match_rule(t, device_id, values, product_id) for t in triggers):
                 continue
             conditions = scene.conditions or []
-            if conditions and not all(_match_rule(c, device_id, values) for c in conditions):
+            if conditions and not all(_match_rule(c, device_id, values, product_id) for c in conditions):
                 continue
-            self._execute_actions(db, scene.actions or [])
+            self._scene_until[cooldown_key] = now + 8
+            self._execute_actions(db, scene.actions or [], device_id)
 
     def _run_bindings(self, db: Session, device_id: str, changed: dict) -> None:
         now = time.time()
@@ -127,10 +138,10 @@ class SceneEngine:
                 self._echo_until[peer] = now + 1.5
                 self._write_device(db, peer, delta)
 
-    def _execute_actions(self, db: Session, actions: List[dict]) -> None:
+    def _execute_actions(self, db: Session, actions: List[dict], source_device_id: str = "") -> None:
         for action in actions:
             kind = action.get("type") or "write"
-            target = action.get("device_id")
+            target = action.get("device_id") or source_device_id
             if not target:
                 continue
             if kind == "write":
