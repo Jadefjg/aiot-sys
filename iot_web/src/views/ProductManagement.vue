@@ -46,7 +46,22 @@
           <el-input v-model="form.name" />
         </el-form-item>
         <el-form-item label="协议">
-          <el-input v-model="form.protocol" placeholder="mqtt / modbus ..." />
+          <el-select
+            v-model="form.protocol"
+            filterable
+            placeholder="从协议库选择"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="item in protocolOptions"
+              :key="item.name"
+              :label="`${item.title || item.name} (${item.name})`"
+              :value="item.name"
+            >
+              <span>{{ item.title || item.name }}</span>
+              <span class="protocol-opt-meta">{{ item.name }}</span>
+            </el-option>
+          </el-select>
         </el-form-item>
         <el-form-item label="版本">
           <el-input v-model="form.version" />
@@ -224,6 +239,8 @@ import { useAuthStore } from '@/store/modules/auth'
 import {
   getProducts, getProduct, createProduct, updateProduct, updateThingModel, deleteProduct
 } from '@/api/modules/products'
+import { getProtocols } from '@/api/modules/protocols'
+import { unwrapList } from '@/utils/apiHelpers'
 
 const authStore = useAuthStore()
 const canProductAdmin = (pid) => authStore.isSuperuser || authStore.productRole(pid) === 'admin'
@@ -247,6 +264,25 @@ const form = reactive({
 const modelDraft = reactive({
   properties: [], events: [], actions: [], validators: [], settings: []
 })
+const protocols = ref([])
+
+const protocolOptions = computed(() => {
+  const list = unwrapList(protocols.value)
+  const names = new Set(list.map((item) => item.name))
+  if (form.protocol && !names.has(form.protocol)) {
+    return [{ name: form.protocol, title: form.protocol }, ...list]
+  }
+  return list
+})
+
+const loadProtocols = async () => {
+  try {
+    protocols.value = unwrapList(await getProtocols())
+  } catch {
+    protocols.value = []
+    ElMessage.error('加载协议库失败')
+  }
+}
 
 const configKeys = computed(() => {
   const config = detailProduct.value?.config
@@ -275,7 +311,12 @@ const resetForm = () => {
   })
 }
 
-const openCreate = () => { editing.value = null; resetForm(); formVisible.value = true }
+const openCreate = () => {
+  editing.value = null
+  resetForm()
+  loadProtocols()
+  formVisible.value = true
+}
 const openEdit = (row) => {
   editing.value = row
   Object.assign(form, {
@@ -284,6 +325,7 @@ const openEdit = (row) => {
     is_gateway: row.is_gateway, ota: row.ota,
     controllable: row.controllable, writable: row.writable
   })
+  loadProtocols()
   formVisible.value = true
 }
 
@@ -365,9 +407,13 @@ const remove = async (row) => {
   fetchProducts()
 }
 
-onMounted(fetchProducts)
+onMounted(() => {
+  fetchProducts()
+  loadProtocols()
+})
 </script>
 
 <style scoped>
 .card-header { display: flex; justify-content: space-between; align-items: center; }
+.protocol-opt-meta { float: right; color: #909399; font-size: 12px; margin-left: 12px; }
 </style>
