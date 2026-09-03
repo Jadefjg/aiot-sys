@@ -63,6 +63,17 @@ const markerColor = (item) => {
   return '#3b82f6'
 }
 
+const containerReady = () => {
+  const el = mapEl.value
+  return !!(el && el.clientWidth > 0 && el.clientHeight > 0)
+}
+
+const invalidateSize = () => {
+  if (!map || !containerReady()) return
+  map.invalidateSize()
+  render()
+}
+
 const render = () => {
   if (!map || !L || !layerGroup) return
   layerGroup.clearLayers()
@@ -115,6 +126,21 @@ const render = () => {
   }
 }
 
+let resizeObserver = null
+let resizeRaf = 0
+
+const bindResize = () => {
+  if (typeof ResizeObserver === 'undefined' || !mapEl.value) return
+  resizeObserver = new ResizeObserver(() => {
+    if (resizeRaf) cancelAnimationFrame(resizeRaf)
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0
+      invalidateSize()
+    })
+  })
+  resizeObserver.observe(mapEl.value)
+}
+
 onMounted(async () => {
   L = (await import('leaflet')).default
   delete L.Icon.Default.prototype._getIconUrl
@@ -131,24 +157,35 @@ onMounted(async () => {
   }).addTo(map)
   layerGroup = L.layerGroup().addTo(map)
   render()
+  bindResize()
+  requestAnimationFrame(invalidateSize)
 })
 
-watch(() => [props.points, props.markers], render, { deep: true })
+watch(() => [props.points, props.markers], () => {
+  invalidateSize()
+}, { deep: true })
 
 onUnmounted(() => {
+  if (resizeRaf) cancelAnimationFrame(resizeRaf)
+  resizeObserver?.disconnect()
+  resizeObserver = null
   if (map) {
     map.remove()
     map = null
   }
 })
+
+defineExpose({ invalidateSize })
 </script>
 
 <style scoped>
 .iot-map {
   width: 100%;
+  min-height: 240px;
   border-radius: 8px;
   overflow: hidden;
   z-index: 0;
+  background: #e8eef4;
 }
 
 .iot-map--dashboard {

@@ -181,12 +181,12 @@
         </el-tab-pane>
 
         <!-- 轨迹 -->
-        <el-tab-pane label="轨迹" name="track">
+        <el-tab-pane label="轨迹" name="track" lazy>
           <div class="tab-toolbar">
             <el-button size="small" @click="loadTrack">刷新轨迹</el-button>
             <span class="hint">基于 MQTT location 上报与定位历史</span>
           </div>
-          <IotMap :points="trackPoints" height="420px" v-loading="trackLoading" />
+          <IotMap ref="trackMapRef" :points="trackPoints" height="420px" v-loading="trackLoading" />
           <el-table :data="trackPoints.slice().reverse()" size="small" max-height="200" style="margin-top: 12px">
             <el-table-column label="时间" width="180">
               <template #default="{ row }">{{ formatTime(row.timestamp) }}</template>
@@ -283,6 +283,7 @@ const lastResponse = ref('')
 const shadow = ref({ reported: {}, desired: {}, version: 0 })
 const desiredJson = ref('{}')
 const meterAddress = ref('')
+const trackMapRef = ref(null)
 const chartRef = ref(null)
 const chartReady = ref(false)
 let chartInst = null
@@ -442,6 +443,13 @@ const downloadConfig = async (database) => {
   }
 }
 
+const refreshTrackMap = () => {
+  nextTick(() => {
+    trackMapRef.value?.invalidateSize?.()
+    setTimeout(() => trackMapRef.value?.invalidateSize?.(), 220)
+  })
+}
+
 const loadTrack = async () => {
   trackLoading.value = true
   try {
@@ -451,6 +459,7 @@ const loadTrack = async () => {
     trackPoints.value = []
   } finally {
     trackLoading.value = false
+    refreshTrackMap()
   }
 }
 
@@ -488,7 +497,10 @@ const onTabChange = (name) => {
   if (name === 'history') renderChart()
   if (name === 'alarms') loadAlarms()
   if (name === 'scenes') loadGatewayScenes()
-  if (name === 'track') loadTrack()
+  if (name === 'track') {
+    loadTrack()
+    refreshTrackMap()
+  }
   if (name === 'shadow') loadShadow()
 }
 
