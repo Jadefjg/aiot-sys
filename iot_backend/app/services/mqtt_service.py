@@ -1,16 +1,18 @@
 """MQTT 服务：设备生命周期 + 连接/协议总线分发"""
 import json
 import logging
+import os
 import threading
+import time
 from queue import Empty, Full, Queue
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 import paho.mqtt.client as mqtt
 
 from app.core.config import settings
 from app.db.session import SessionLocal
-from app.crud.device import device_command_crud, device_data_crud
-from app.schemas.device import DeviceDataCreate
+from app.crud.device import device_command_crud, device_crud, device_data_crud
+from app.schemas.device import DeviceDataCreate, DeviceUpdate
 from app.services.device_runtime_service import device_runtime
 
 logger = logging.getLogger(__name__)
@@ -123,7 +125,7 @@ class MQTTService:
             "event": self._handle_event,
             "log": self._handle_event,
             "heartbeat": lambda d, _: self._set_online(d, True),
-            "firmware": lambda d, p: logger.info("Firmware status %s: %s", d, p),
+            "firmware": self._handle_firmware,
         }
         handler = handlers.get(message_type)
         if handler:
@@ -225,15 +227,48 @@ class MQTTService:
             db.close()
 
     def _handle_push(self, device_id: str, payload: bytes):
-        raw = payload.decode("utf-8", errors="replace")
-        self._handle_event(device_id, raw)
+        """push/{id}/values 是属性上报，不是事件"""
+        self._handle_values(device_id, payload.decode("utf-8", errors="replace"))
+
+    def _handle_firmware(self, device_id: str, raw: str):
+        data = self._parse(raw)
+        try:
+            task_id = int(data.get("task_id"))
+        except (TypeError, ValueError):
+            logger.info("Firmware status %s: %s", device_id, raw)
+            return
+        status = data.get("status") or "in_progress"
+        progress = data.get("progress")
+        error = data.get("error") or data.get("error_message")
+        db = SessionLocal()
+        try:
+            from app.crud.firmware import firmware_upgrade_task_crud
+
+            if status in ("success", "failed", "cancelled", "in_progress", "pending"):
+                firmware_upgrade_task_crud.update_status(
+                    db, task_id, status,
+                    progress=int(progress) if progress is not None else None,
+                    error_message=error,
+                )
+            elif progress is not None:
+                firmware_upgrade_task_crud.update_progress(db, task_id, int(progress))
+            version = data.get("firmware_version") or data.get("version")
+            if status == "success" and version:
+                device = device_crud.get_by_device_id(db, device_id)
+                if device:
+                    device_crud.update(db, device, DeviceUpdate(firmware_version=str(version)))
+        finally:
+            db.close()
 
     def _handle_response(self, raw: str):
         device_runtime.on_response(self._parse(raw))
 
     def _handle_legacy_command(self, device_id: str, raw: str):
         data = self._parse(raw)
-        command_id = data.get("command_id")
+        try:
+            command_id = int(data.get("command_id"))
+        except (TypeError, ValueError):
+            command_id = None
         if not command_id:
             self._handle_response(raw)
             return
@@ -280,18 +315,50 @@ class MQTTService:
         self.connected = False
         return True
 
-    def publish(self, topic: str, payload: Union[str, bytes, dict], qos: int = 1):
-        if not (self.client and self.connected):
-            logger.error("MQTT client not connected")
-            return
+    def publish(self, topic: str, payload: Union[str, bytes, dict], qos: int = 1) -> bool:
         if isinstance(payload, dict):
             payload = json.dumps(payload)
+        if self.client and self.connected:
+            return self._publish_connected(topic, payload, qos)
+        return self._publish_once(topic, payload, qos)
+
+    def _publish_connected(self, topic: str, payload, qos: int) -> bool:
         try:
             result = self.client.publish(topic, payload, qos)
             if result.rc != mqtt.MQTT_ERR_SUCCESS:
                 logger.error("Publish failed %s rc=%s", topic, result.rc)
+                return False
+            return True
         except Exception as exc:
             logger.error("Error publishing: %s", exc)
+            return False
+
+    def _publish_once(self, topic: str, payload, qos: int) -> bool:
+        """未订阅进程（如 Celery）短连接只发不订，避免与 backend 重复消费"""
+        client = mqtt.Client(client_id=f"iot-pub-{os.getpid()}")
+        try:
+            if settings.MQTT_USERNAME and settings.MQTT_PASSWORD:
+                client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
+            client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, 10)
+            result = client.publish(topic, payload, qos)
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                if result.rc != mqtt.MQTT_ERR_SUCCESS:
+                    logger.error("One-shot publish failed %s rc=%s", topic, result.rc)
+                    return False
+                client.loop(timeout=0.2)
+                if result.is_published():
+                    return True
+            logger.error("One-shot publish timeout %s", topic)
+            return False
+        except Exception as exc:
+            logger.error("MQTT publish failed: %s", exc)
+            return False
+        finally:
+            try:
+                client.disconnect()
+            except Exception:
+                pass
 
 
 mqtt_service = MQTTService()

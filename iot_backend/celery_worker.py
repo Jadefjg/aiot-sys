@@ -1,16 +1,13 @@
-import json
 import time
 import requests
-import hashlib
-from typing import Optional
-from datetime import datetime
 from celery import Celery
 from celery.utils.log import get_task_logger
 
 from app.core.config import settings
 from app.db.session import SessionLocal
 from app.crud.device import device_crud
-from app.crud.firmware import firmware_crud
+from app.crud.firmware import firmware_crud, firmware_upgrade_task_crud
+from app.schemas.device import DeviceUpdate
 from app.services.mqtt_service import mqtt_service
 
 
@@ -38,111 +35,100 @@ celery_app.conf.update(
 
 logger = get_task_logger(__name__)
 
+def _fail_upgrade(db, task_id: int, message: str) -> dict:
+    firmware_upgrade_task_crud.update_status(db, task_id, "failed", error_message=message)
+    logger.error("Task %s: %s", task_id, message)
+    return {"status": "failed", "error": message}
+
+
+def _poll_upgrade_result(celery_task, task_id: int, firmware, max_wait: int = 1800, interval: int = 10) -> dict:
+    """独立会话轮询，避免 MySQL REPEATABLE READ 看不到 MQTT 回写"""
+    waited = 0
+    while waited < max_wait:
+        time.sleep(interval)
+        waited += interval
+        db = SessionLocal()
+        try:
+            task = firmware_upgrade_task_crud.get(db, id=task_id)
+            if not task:
+                return {"status": "failed", "error": "Task not found"}
+            celery_task.update_state(
+                state="PROGRESS",
+                meta={
+                    "progress": int(min(15 + (waited / max_wait) * 80, 95)),
+                    "status": f"Waiting for device response({task.status})",
+                },
+            )
+            if task.status == "success":
+                device = device_crud.get(db, task.device_id)
+                if device:
+                    device_crud.update(db, device, DeviceUpdate(firmware_version=firmware.version))
+                logger.info("Task %s: Firmware upgrade completed successfully", task_id)
+                return {"status": "success", "message": "Firmware upgrade completed"}
+            if task.status == "failed":
+                return {"status": "failed", "error": task.error_message}
+            if task.status == "cancelled":
+                return {"status": "cancelled", "message": "Firmware upgrade was cancelled"}
+        finally:
+            db.close()
+    db = SessionLocal()
+    try:
+        return _fail_upgrade(db, task_id, "Firmware upgrade timeout")
+    finally:
+        db.close()
+
+
 @celery_app.task(bind=True, name="firmware_tasks.initiate_firmware_upgrade")
 def initiate_firmware_upgrade(self, task_id: int):
     """启动固件升级任务"""
+    firmware = None
+    published = False
     db = SessionLocal()
     try:
-        # 获取升级任务
-        upgrade_task = firmware_crud.get_upgrade_task(db, task_id)
+        upgrade_task = firmware_upgrade_task_crud.get(db, id=task_id)
         if not upgrade_task:
-            logger.error(f"Upgrade task {task_id} not found")
+            logger.error("Upgrade task %s not found", task_id)
             return {"status": "failed", "error": "Task not found"}
         device = device_crud.get(db, upgrade_task.device_id)
         firmware = firmware_crud.get(db, upgrade_task.firmware_id)
         if not device or not firmware:
-            error_msg = "Device or Firmware not found"
-            firmware_crud.update_upgrade_task_status(db, upgrade_task, "failed", error_message=error_msg)
-            logger.error(f"Task {task_id}: {error_msg}")
-            return {"status": "failed", "error": error_msg}
-        logger.info(f"Starting firmware upgrade for device {device.device_id} to version {firmware.version}")
-        # 更新任务状态为进行中
-        firmware_crud.update_upgrade_task_status(db, upgrade_task,"in_progress", progress=0)
-        # 1. 验证固件文件
-        self.update_state(state='PROGRESS', meta={'progress': 5, 'status':'Validating firmware'})
+            return _fail_upgrade(db, task_id, "Device or Firmware not found")
+        logger.info(
+            "Starting firmware upgrade for device %s to version %s",
+            device.device_id, firmware.version,
+        )
+        firmware_upgrade_task_crud.update_status(db, task_id, "in_progress", progress=0)
+        self.update_state(state="PROGRESS", meta={"progress": 5, "status": "Validating firmware"})
         if not _validate_firmware_file(firmware):
-            error_msg = "Firmware file validation failed"
-            firmware_crud.update_upgrade_task_status(
-                db, upgrade_task, "failed", error_message=error_msg
-            )
-            logger.error(f"Task {task_id}: {error_msg}")
-            return {"status": "failed", "error": error_msg}
-
-        # 2. 检查设备状态
-        self.update_state(state='PROGRESS', meta={'progress': 10, 'status':'Checking device status'})
+            return _fail_upgrade(db, task_id, "Firmware file validation failed")
+        self.update_state(state="PROGRESS", meta={"progress": 10, "status": "Checking device status"})
         if device.status != "online":
-            error_msg = f"Device is not online (status: {device.status})"
-            firmware_crud.update_upgrade_task_status(
-                db, upgrade_task, "failed", error_message=error_msg
-            )
-            logger.error(f"Task {task_id}: {error_msg}")
-            return {"status": "failed", "error": error_msg}
-
-        # 3. 向设备发送升级通知
-        self.update_state(state='PROGRESS', meta={'progress': 15, 'status':'Sending upgrade command'})
-        upgrade_command = {
+            return _fail_upgrade(db, task_id, f"Device is not online (status: {device.status})")
+        self.update_state(state="PROGRESS", meta={"progress": 15, "status": "Sending upgrade command"})
+        command = {
             "task_id": task_id,
             "firmware_version": firmware.version,
             "firmware_url": firmware.file_url,
             "firmware_hash": firmware.file_hash,
-            "firmware_size": firmware.file_size
+            "firmware_size": firmware.file_size,
         }
-        topic = f"device/{device.device_id}/firmware/upgrade"
+        if not mqtt_service.publish(f"device/{device.device_id}/firmware/upgrade", command):
+            return _fail_upgrade(db, task_id, "Failed to send upgrade command")
+        logger.info("Sent upgrade command to device %s", device.device_id)
+        published = True
+    except Exception as exc:
+        error_msg = f"Unexpected error: {exc}"
+        logger.error("Task %s: %s", task_id, error_msg)
         try:
-            mqtt_service.publish(topic, json.dumps(upgrade_command))
-            logger.info(f"Sent upgrade command to device {device.device_id}")
-        except Exception as e:
-            error_msg = f"Failed to send upgrade command: {str(e)}"
-            firmware_crud.update_upgrade_task_status(
-                db, upgrade_task, "failed", error_message=error_msg
-            )
-            logger.error(f"Task {task_id}: {error_msg}")
-        return {"status": "failed", "error": error_msg}
-
-        # 4. 等待设备响应和升级过程
-        max_wait_time = 1800 # 30分钟
-        check_interval = 10 # 10秒检查一次
-        waited_time = 0
-
-        while waited_time < max_wait_time:
-            time.sleep(check_interval)
-            waited_time += check_interval
-            # 刷新任务状态
-            db.refresh(upgrade_task)
-        progress = min(15 + (waited_time / max_wait_time) * 80, 95)
-        self.update_state(
-            state='PROGRESS',
-            meta={
-                'progress': int(progress),
-                'status': f'Waiting for device response({upgrade_task.status})'
-            }
-        )
-        if upgrade_task.status == "success":
-            logger.info(f"Task {task_id}: Firmware upgrade completed successfully")
-            # 更新设备固件版本
-            device_crud.update(db, device, {"firmware_version":firmware.version})
-            return {"status": "success", "message": "Firmware upgrade completed"}
-        elif upgrade_task.status == "failed":
-            logger.error(f"Task {task_id}: Firmware upgrade failed:{upgrade_task.error_message}")
-            return {"status": "failed", "error":upgrade_task.error_message}
-        elif upgrade_task.status == "cancelled":
-            logger.info(f"Task {task_id}: Firmware upgrade was cancelled")
-            return {"status": "cancelled", "message": "Firmware upgrade was cancelled"}
-            # 超时处理
-            error_msg = "Firmware upgrade timeout"
-            firmware_crud.update_upgrade_task_status(db, upgrade_task, "failed", error_message=error_msg)
-            logger.error(f"Task {task_id}: {error_msg}")
-            return {"status": "failed", "error": error_msg}
-    except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(f"Task {task_id}: {error_msg}")
-        try:
-            firmware_crud.update_upgrade_task_status(db, upgrade_task, "failed", error_message=error_msg)
-        except:
+            firmware_upgrade_task_crud.update_status(db, task_id, "failed", error_message=error_msg)
+        except Exception:
             pass
         return {"status": "failed", "error": error_msg}
     finally:
         db.close()
+    if published and firmware:
+        return _poll_upgrade_result(self, task_id, firmware)
+    return {"status": "failed", "error": "Task aborted"}
 
 @celery_app.task(name="firmware_tasks.cleanup_old_firmware_files")
 def cleanup_old_firmware_files():
@@ -162,7 +148,7 @@ def check_device_firmware_updates():
         online_devices = device_crud.get_online_devices(db)
         for device in online_devices:
             # 检查是否有更新的固件版本
-            latest_firmware = firmware_crud.get_latest_firmware_for_product(db, device.product_id)
+            latest_firmware = firmware_crud.get_latest_firmware(db, device.product_id)
             if (latest_firmware and latest_firmware.version != device.firmware_version and latest_firmware.is_active):
                 logger.info(f"Device {device.device_id} has firmware update available:"f"{device.firmware_version} -> {latest_firmware.version}")
         # 这里可以发送通知或自动创建升级任务

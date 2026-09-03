@@ -279,19 +279,44 @@ class TestCRUDDeviceData:
             data={"temperature": 25.5, "humidity": 60}
         )
 
+    @patch("app.services.timeseries.timeseries")
     @patch('app.crud.device.device_crud')
-    def test_create_device_data_success(self, mock_device_crud, crud_device_data, mock_db, mock_device, device_data_create):
+    def test_create_device_data_success(
+        self, mock_device_crud, mock_ts, crud_device_data, mock_db, mock_device, device_data_create
+    ):
         """测试创建设备数据 - 成功"""
-        # 配置模拟
+        mock_ts.enabled = False
         mock_device_crud.get_by_device_id.return_value = mock_device
         mock_db.add = MagicMock()
         mock_db.commit = MagicMock()
         mock_db.refresh = MagicMock()
 
-        # 执行测试
         result = crud_device_data.create(mock_db, obj_in=device_data_create)
 
-        # 验证结果
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+
+    @patch("app.services.timeseries.timeseries")
+    @patch("app.crud.device.device_crud")
+    def test_create_skips_mysql_for_telemetry_when_influx_on(
+        self, mock_device_crud, mock_ts, crud_device_data, mock_db, mock_device
+    ):
+        mock_device_crud.get_by_device_id.return_value = mock_device
+        mock_ts.enabled = True
+        obj = DeviceDataCreate(device_id="device001", data={"temperature": 1}, data_type="telemetry")
+        result = crud_device_data.create(mock_db, obj_in=obj)
+        assert result is None
+        mock_db.add.assert_not_called()
+
+    @patch("app.services.timeseries.timeseries")
+    @patch("app.crud.device.device_crud")
+    def test_create_persists_event_when_influx_on(
+        self, mock_device_crud, mock_ts, crud_device_data, mock_db, mock_device
+    ):
+        mock_device_crud.get_by_device_id.return_value = mock_device
+        mock_ts.enabled = True
+        obj = DeviceDataCreate(device_id="device001", data={"name": "overheat"}, data_type="event")
+        crud_device_data.create(mock_db, obj_in=obj)
         mock_db.add.assert_called_once()
         mock_db.commit.assert_called_once()
 
@@ -382,7 +407,7 @@ class TestCRUDDeviceCommand:
     def command_create_data(self):
         """创建命令数据"""
         return DeviceCommandCreate(
-            device_id=1,
+            device_id="device001",
             command_type="reboot",
             command_data={"delay": 10}
         )

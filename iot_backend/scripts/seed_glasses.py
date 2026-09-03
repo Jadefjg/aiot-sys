@@ -135,23 +135,34 @@ DEMO_DEVICES = [
     ("glasses-lite-001", "轻量眼镜-演示", "glasses-lite"),
 ]
 
+GLASSES_PRODUCTS = ("glasses-full", "glasses-lite")
+
+
+def _glasses_triggers(field: str, operator: str, value):
+    """只匹配眼镜产品，避免任意设备的同名属性误触发关相机"""
+    return [
+        {"product_id": product_id, "field": field, "operator": operator, "value": value}
+        for product_id in GLASSES_PRODUCTS
+    ]
+
+
 SCENES = [
     SceneCreate(
         name="glasses-thermal",
         enabled=True,
-        triggers=[{"field": "temperature", "operator": ">", "value": 45}],
+        triggers=_glasses_triggers("temperature", ">", 45),
         actions=[{"type": "write", "values": {"camera_on": False}}],
     ),
     SceneCreate(
         name="glasses-privacy",
         enabled=True,
-        triggers=[{"field": "worn", "operator": "==", "value": False}],
+        triggers=_glasses_triggers("worn", "==", False),
         actions=[{"type": "write", "values": {"camera_on": False, "mic_on": False}}],
     ),
     SceneCreate(
         name="glasses-low-battery",
         enabled=True,
-        triggers=[{"field": "battery", "operator": "<", "value": 15}],
+        triggers=_glasses_triggers("battery", "<", 15),
         actions=[{"type": "write", "values": {"camera_on": False}}],
     ),
 ]

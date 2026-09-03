@@ -34,7 +34,12 @@ def _to_number(value):
 
 def _compare(left, operator: str, right) -> bool:
     fn = OPS.get(operator or "==")
-    return bool(fn and fn(_to_number(left), _to_number(right)))
+    if not fn:
+        return False
+    try:
+        return bool(fn(_to_number(left), _to_number(right)))
+    except TypeError:
+        return False
 
 
 def _in_time_window(scene: Scene) -> bool:

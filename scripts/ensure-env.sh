@@ -67,3 +67,18 @@ while IFS= read -r line || [[ -n "$line" ]]; do
 done < "$TEMPLATE"
 
 echo "完成：新增 ${added} 项，已有键未改动。"
+
+expected_profile=""
+case "$MODE" in
+  local|production) expected_profile="local" ;;
+  shared) expected_profile="shared" ;;
+esac
+
+current_profile="$(
+  grep -E '^[[:space:]]*COMPOSE_PROFILES=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '[:space:]'
+)"
+if [[ -z "$current_profile" ]]; then
+  echo "警告: .env 缺少 COMPOSE_PROFILES，中间件容器不会启动。请设为 ${expected_profile}。" >&2
+elif [[ -n "$expected_profile" && "$current_profile" != "$expected_profile" ]]; then
+  echo "警告: .env 中 COMPOSE_PROFILES=${current_profile}，当前模式期望 ${expected_profile}。脚本不会覆盖已有值，请手动修改。" >&2
+fi

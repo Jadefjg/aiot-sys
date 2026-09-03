@@ -75,6 +75,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from '@/api/modules/auth'
 import { ElMessage } from 'element-plus'
+import { formatApiDetail } from '@/utils/apiHelpers'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -114,30 +115,26 @@ const rules = {
 }
 
 const handleRegister = async () => {
-  if (!formRef.value) return
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return
-    loading.value = true
-    try {
-      await register({
-        username: form.username,
-        email: form.email,
-        password: form.password
-      })
-      ElMessage.success('注册成功，请登录')
-      router.push('/login')
-    } catch (error) {
-      const status = error.response?.status
-      const detail = error.response?.data?.detail
-      if (status === 400 && typeof detail === 'string') {
-        ElMessage.error(detail)
-      } else {
-        ElMessage.error('注册失败，请稍后重试')
-      }
-    } finally {
-      loading.value = false
-    }
-  })
+  if (!formRef.value || loading.value) return
+  try {
+    await formRef.value.validate()
+  } catch {
+    return
+  }
+  loading.value = true
+  try {
+    await register({
+      username: form.username,
+      email: form.email,
+      password: form.password
+    })
+    ElMessage.success('注册成功，请登录')
+    router.push('/login')
+  } catch (error) {
+    ElMessage.error(formatApiDetail(error.response?.data?.detail) || '注册失败，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 

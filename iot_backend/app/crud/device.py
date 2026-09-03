@@ -87,7 +87,9 @@ class CRUDDeviceData:
             device.device_id, device.product_id or "default",
             obj_in.data or {}, obj_in.data_type or "property",
         )
-        if timeseries.enabled:
+        data_type = obj_in.data_type or "property"
+        # 遥测走 Influx；事件/定位等仍落 MySQL，否则历史 API 查不到
+        if timeseries.enabled and data_type in ("property", "telemetry"):
             return None
         db_obj = DeviceData(
             device_id=device.id,

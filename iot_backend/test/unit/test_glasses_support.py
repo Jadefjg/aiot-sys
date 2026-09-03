@@ -1,6 +1,6 @@
 """智能眼镜增量能力：物模型种子、媒体事件、场景动作回落到触发设备"""
 from app.services.media_service import EVENT_TYPES, record_event
-from app.services.scene_engine import SceneEngine, _match_rule
+from app.services.scene_engine import SceneEngine, _compare, _match_rule
 from app.services.validator_service import evaluate_validators
 
 
@@ -51,3 +51,17 @@ def test_media_event_types_only_capture_media():
     assert EVENT_TYPES["photo_captured"] == "photo"
     assert EVENT_TYPES["clip_ready"] == "clip"
     assert record_event.__name__ == "record_event"
+
+
+def test_compare_mixed_types_do_not_raise():
+    assert _compare("hot", ">", 45) is False
+    assert _compare(None, "<", 15) is False
+    assert _compare(50, ">", 45) is True
+
+
+def test_seed_glasses_triggers_include_product_id():
+    from scripts.seed_glasses import GLASSES_PRODUCTS, SCENES
+
+    for scene in SCENES:
+        assert scene.triggers
+        assert all(item.get("product_id") in GLASSES_PRODUCTS for item in scene.triggers)
