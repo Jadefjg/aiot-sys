@@ -15,6 +15,7 @@ class Device(Base):
     product_id = Column(String(100), nullable=False, index=True)
     device_type = Column(String(100), nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     group_id = Column(Integer, ForeignKey("device_groups.id"), nullable=True)
     # 网关/子设备层级：子设备挂 gateway_id
     gateway_id = Column(String(100), nullable=True, index=True)
@@ -71,7 +72,12 @@ class DeviceCommand(Base):
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False,index=True)
     command_type = Column(String(50), nullable=False)  # control, config,upgrade, etc.
     command_data = Column(JSON, nullable=False)
+    idempotency_key = Column(String(100), unique=True, nullable=True, index=True)
     status = Column(String(20), default="pending")  # pending, sent,acknowledged, failed
+    timeout_seconds = Column(Integer, default=30)
+    retry_count = Column(Integer, default=0)
+    max_retries = Column(Integer, default=3)
+    expires_at = Column(DateTime, nullable=True, index=True)
     sent_at = Column(DateTime, nullable=True)
     acknowledged_at = Column(DateTime, nullable=True)
     response_data = Column(JSON, nullable=True)

@@ -293,9 +293,15 @@ class MQTTService:
             self.client.on_connect = self.on_connect
             self.client.on_disconnect = self.on_disconnect
             self.client.on_message = self.on_message
+            self.client.reconnect_delay_set(min_delay=1, max_delay=30)
             if settings.MQTT_USERNAME and settings.MQTT_PASSWORD:
                 self.client.username_pw_set(settings.MQTT_USERNAME, settings.MQTT_PASSWORD)
-            self.client.connect(settings.MQTT_BROKER_HOST, settings.MQTT_BROKER_PORT, 60)
+            self.client.connect(
+                settings.MQTT_BROKER_HOST,
+                settings.MQTT_BROKER_PORT,
+                keepalive=60,
+                clean_start=True,
+            )
             self.client.loop_start()
             logger.info("MQTT service started")
             return True
@@ -323,15 +329,18 @@ class MQTTService:
         return self._publish_once(topic, payload, qos)
 
     def _publish_connected(self, topic: str, payload, qos: int) -> bool:
-        try:
-            result = self.client.publish(topic, payload, qos)
-            if result.rc != mqtt.MQTT_ERR_SUCCESS:
-                logger.error("Publish failed %s rc=%s", topic, result.rc)
-                return False
-            return True
-        except Exception as exc:
-            logger.error("Error publishing: %s", exc)
-            return False
+        retries = max(1, int(settings.MQTT_PUBLISH_RETRIES))
+        for attempt in range(retries):
+            try:
+                result = self.client.publish(topic, payload, qos)
+                if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                    return True
+                logger.warning("Publish failed %s rc=%s attempt=%s", topic, result.rc, attempt + 1)
+            except Exception as exc:
+                logger.warning("Error publishing %s attempt=%s: %s", topic, attempt + 1, exc)
+            if attempt + 1 < retries:
+                time.sleep(float(settings.MQTT_RETRY_BACKOFF_SECONDS) * (attempt + 1))
+        return False
 
     def _publish_once(self, topic: str, payload, qos: int) -> bool:
         """未订阅进程（如 Celery）短连接只发不订，避免与 backend 重复消费"""

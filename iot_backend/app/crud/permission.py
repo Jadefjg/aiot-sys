@@ -61,7 +61,7 @@ class CRUDPermission:
 
     def delete(self, db: Session, *, permission_id: int) -> Optional[Permission]:
         """删除权限"""
-        obj = self.get(db, permission_id)
+        obj = db.query(Permission).get(permission_id)
         if not obj:
             return None
         db.delete(obj)

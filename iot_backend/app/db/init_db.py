@@ -18,13 +18,27 @@ DEVICE_EXTRA_COLUMNS = {
     "error_string": "TEXT NULL",
     "geo_code": "VARCHAR(50) NULL",
     "values": "JSON NULL",
+    "tenant_id": "INT NULL",
 }
+PRODUCT_EXTRA_COLUMNS = {"tenant_id": "INT NULL"}
+
+DEVICE_COMMAND_EXTRA_COLUMNS = {
+    "idempotency_key": "VARCHAR(100) NULL",
+    "timeout_seconds": "INT DEFAULT 30",
+    "retry_count": "INT DEFAULT 0",
+    "max_retries": "INT DEFAULT 3",
+    "expires_at": "DATETIME NULL",
+}
+FIRMWARE_TASK_EXTRA_COLUMNS = {"rollout_id": "INT NULL"}
 
 
 def ensure_schema():
     import_models()
     Base.metadata.create_all(bind=engine)
     _ensure_device_columns()
+    _ensure_columns("device_commands", DEVICE_COMMAND_EXTRA_COLUMNS)
+    _ensure_columns("products", PRODUCT_EXTRA_COLUMNS)
+    _ensure_columns("firmware_upgrade_tasks", FIRMWARE_TASK_EXTRA_COLUMNS)
     _ensure_script_columns()
     _ensure_indexes()
     _ensure_firmware_version_constraint()
@@ -84,6 +98,19 @@ def _ensure_device_columns():
             except Exception as exc:
                 logger.warning("Skip column %s: %s", name, exc)
 
+def _ensure_columns(table: str, columns: dict) -> None:
+    inspector = inspect(engine)
+    if table not in inspector.get_table_names():
+        return
+    existing = {c["name"] for c in inspector.get_columns(table)}
+    with engine.begin() as conn:
+        for name, ddl in columns.items():
+            if name not in existing:
+                try:
+                    conn.execute(text(f"ALTER TABLE `{table}` ADD COLUMN `{name}` {ddl}"))
+                except Exception as exc:
+                    logger.warning("Skip column %s.%s: %s", table, name, exc)
+
 
 def _ensure_script_columns():
     inspector = inspect(engine)
@@ -105,6 +132,8 @@ INDEXES = [
     ("devices", "ix_devices_link_id", "link_id"),
     ("channels", "ix_channels_enabled", "enabled"),
     ("data_rules", "ix_data_rules_enabled", "enabled"),
+    ("device_commands", "ux_device_commands_idempotency", "idempotency_key"),
+    ("device_commands", "ix_device_commands_expires", "expires_at"),
 ]
 
 DEFAULT_PERMISSIONS = [

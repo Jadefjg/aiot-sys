@@ -61,6 +61,7 @@ class ThingModel(BaseModel):
 
 class ProductBase(BaseModel):
     product_id: str
+    tenant_id: Optional[int] = None
     name: str
     description: Optional[str] = None
     protocol: Optional[str] = None

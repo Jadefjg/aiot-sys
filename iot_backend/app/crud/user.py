@@ -45,6 +45,7 @@ class CRUDUser:
             full_name=obj_in.full_name,
             is_active=True if obj_in.is_active is None else obj_in.is_active,
             is_superuser=obj_in.is_superuser
+            ,tenant_id=obj_in.tenant_id
         )
         db.add(db_obj)
         db.commit()

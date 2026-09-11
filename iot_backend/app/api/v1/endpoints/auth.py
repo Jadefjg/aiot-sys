@@ -2,6 +2,8 @@ from datetime import timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import jwt
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -10,10 +12,12 @@ from app.core.config import settings
 from app.core.dependencies import get_current_active_user
 from app.crud.user import user_crud
 from app.db.session import get_db
+from app.services.token_revocation import revoke
 from app.schemas.token import Token
 from app.schemas.user import User, UserCreate, UserRegister
 
 router = APIRouter()
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 def _issue_token(db: Session, username: str, password: str) -> dict:
@@ -82,6 +86,14 @@ def login_token_alias(
 def test_token(current_user: User = Depends(get_current_active_user)) -> Any:
     """Test access token"""
     return current_user
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(token: str = Depends(oauth2_scheme)) -> None:
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        revoke(payload.get("jti"), int(payload.get("exp", 0)))
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token无效")
 
 
 @router.post("/register", response_model=User, status_code=status.HTTP_201_CREATED)

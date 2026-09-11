@@ -43,6 +43,7 @@ class FirmwareUpgradeTask(Base):
     id = Column(Integer, primary_key=True, index=True)
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False)  # 目标设备
     firmware_id = Column(Integer, ForeignKey("firmware.id"), nullable=False)  # 目标固件
+    rollout_id = Column(Integer, ForeignKey("firmware_rollouts.id"), nullable=True, index=True)
     status = Column(String(20), default="pending")  # pending, in_progress, success, failed, cancelled
     progress = Column(Integer, default=0)  # 升级进度 (0-100)
     celery_task_id = Column(String(100), nullable=True, index=True)
@@ -59,3 +60,16 @@ class FirmwareUpgradeTask(Base):
     device = relationship("Device", back_populates="upgrade_tasks")
     firmware = relationship("Firmware", back_populates="upgrade_tasks")
     creator = relationship("User")
+
+
+class FirmwareRollout(Base):
+    __tablename__ = "firmware_rollouts"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    firmware_id = Column(Integer, ForeignKey("firmware.id"), nullable=False, index=True)
+    status = Column(String(20), default="draft", index=True)
+    batch_size = Column(Integer, default=10)
+    pause_on_failure = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

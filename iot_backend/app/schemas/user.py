@@ -15,6 +15,7 @@ class UserCreate(UserBase):
     full_name: Optional[str] = None
     is_active: Optional[bool] = True
     is_superuser: Optional[bool] = False
+    tenant_id: Optional[int] = None
 
 
 class UserRegister(BaseModel):
@@ -32,6 +33,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     is_active: Optional[bool] = None
     is_superuser: Optional[bool] = None
+    tenant_id: Optional[int] = None
 
 
 class UserRolesAssign(BaseModel):
@@ -43,6 +45,7 @@ class UserInDBBase(UserBase):
     id: int
     is_active: bool
     is_superuser: bool = False
+    tenant_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

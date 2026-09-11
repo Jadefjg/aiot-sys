@@ -1,7 +1,7 @@
 """产品与物模型"""
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, JSON, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text
 
 from app.db.base import Base
 
@@ -13,6 +13,7 @@ class Product(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     product_id = Column(String(100), unique=True, index=True, nullable=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
     protocol = Column(String(50), nullable=True)

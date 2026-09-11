@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.crud.user import user_crud, role_crud
 from app.db.models.user import User
 from app.core.config import settings
+from app.services.token_revocation import is_revoked
 
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
@@ -26,6 +27,8 @@ async def get_current_user(db: Session = Depends(get_db), token: str = Depends(o
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
+            raise credentials_exception
+        if is_revoked(payload.get("jti")):
             raise credentials_exception
     except JWTError:
         raise credentials_exception

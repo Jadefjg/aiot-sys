@@ -10,6 +10,7 @@ class DeviceBase(BaseModel):
     device_name: str
     product_id: str
     owner_id: Optional[int] = None
+    tenant_id: Optional[int] = None
     group_id: Optional[int] = None
     gateway_id: Optional[str] = None
     link_id: Optional[str] = None
@@ -21,6 +22,7 @@ class DeviceCreate(DeviceBase):
 
 
 class DeviceUpdate(BaseModel):
+    metadata: Optional[Dict[str, Any]] = None
     device_name: Optional[str] = None
     owner_id: Optional[int] = None
     group_id: Optional[int] = None
@@ -84,6 +86,9 @@ class DeviceCommandCreate(BaseModel):
     device_id: str
     command_type: str
     command_data: Dict[str, Any]
+    idempotency_key: Optional[str] = None
+    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    max_retries: int = Field(default=3, ge=0, le=10)
 
 
 class DeviceCommand(BaseModel):
@@ -92,6 +97,11 @@ class DeviceCommand(BaseModel):
     command_type: str
     command_data: Dict[str, Any]
     status: str
+    idempotency_key: Optional[str] = None
+    timeout_seconds: int = 30
+    retry_count: int = 0
+    max_retries: int = 3
+    expires_at: Optional[datetime] = None
     sent_at: Optional[datetime] = None
     acknowledged_at: Optional[datetime] = None
     response_data: Optional[Dict[str, Any]] = None

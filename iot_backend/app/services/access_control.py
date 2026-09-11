@@ -93,6 +93,8 @@ def visible_device_query(db: Session, user: User) -> Query:
     query = db.query(Device)
     if user.is_superuser:
         return query
+    if user.tenant_id is not None:
+        query = query.filter(Device.tenant_id == user.tenant_id)
     products = [r.product_id for r in acl_crud.list_product_for_user(db, user.id)]
     devices = [r.device_id for r in acl_crud.list_device_for_user(db, user.id)]
     conds = [Device.owner_id == user.id]
@@ -132,6 +134,8 @@ def visible_product_ids(db: Session, user: User) -> List[str]:
 def list_visible_products(db: Session, user: User, skip: int = 0, limit: int = 100) -> List[Product]:
     query = db.query(Product)
     if not user.is_superuser:
+        if user.tenant_id is not None:
+            query = query.filter(Product.tenant_id == user.tenant_id)
         ids = visible_product_ids(db, user)
         if not ids:
             return []

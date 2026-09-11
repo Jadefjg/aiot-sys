@@ -40,6 +40,7 @@ export const login = async (username, password) => {
 }
 
 export const testToken = () => api.post('/auth/test-token')
+export const logout = () => api.post('/auth/logout')
 
 export const getCurrentUser = () => api.get('/users/me')
 

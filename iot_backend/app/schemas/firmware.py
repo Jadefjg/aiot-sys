@@ -47,3 +47,21 @@ class FirmwareUpgradeTask(FirmwareUpgradeTaskBase):
 
     class Config:
         from_attributes = True
+
+class FirmwareRolloutCreate(BaseModel):
+    name: str
+    firmware_id: int
+    device_ids: list[int] = []
+    batch_size: int = 10
+    pause_on_failure: bool = True
+
+class FirmwareRollout(BaseModel):
+    id: int
+    name: str
+    firmware_id: int
+    status: str
+    batch_size: int
+    pause_on_failure: bool
+    created_at: datetime
+    class Config:
+        from_attributes = True

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { login as loginApi, getCurrentUser } from '@/api/modules/auth'
+import { login as loginApi, getCurrentUser, logout as logoutApi } from '@/api/modules/auth'
 import { getMyPermissions } from '@/api/modules/users'
 import { getMyAccess } from '@/api/modules/acl'
 
@@ -95,7 +95,10 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
-    logout() {
+    async logout() {
+      if (this.token) {
+        try { await logoutApi() } catch { /* still clear local auth state */ }
+      }
       this.token = null
       this.user = null
       this.permissions = []

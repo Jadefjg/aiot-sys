@@ -9,6 +9,7 @@ export const getScenes = (params = {}) => api.get('/scenes', { params })
 export const createScene = (data) => api.post('/scenes', data)
 export const updateScene = (id, data) => api.put(`/scenes/${id}`, data)
 export const deleteScene = (id) => api.delete(`/scenes/${id}`)
+export const getSceneExecutions = (id, params = {}) => api.get(`/scenes/${id}/executions`, { params })
 
 export const getJobs = (params = {}) => api.get('/jobs', { params })
 export const createJob = (data) => api.post('/jobs', data)

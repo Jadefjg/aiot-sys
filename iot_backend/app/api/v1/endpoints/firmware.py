@@ -10,16 +10,55 @@ import uuid
 
 from app.db.session import get_db
 from app.db.models.user import User
+from app.db.models.firmware import FirmwareRollout, FirmwareUpgradeTask
 from app.core.config import settings
 from app.crud.device import device_crud
 from app.crud.firmware import firmware_crud, firmware_upgrade_task_crud
 from app.core.dependencies import get_current_active_user, has_permission
 from app.tasks.firmware_tasks import initiate_firmware_upgrade
-from app.schemas.firmware import Firmware, FirmwareCreate, FirmwareUpgradeTask, FirmwareUpgradeTaskCreate
+from app.schemas.firmware import Firmware, FirmwareCreate, FirmwareUpgradeTask, FirmwareUpgradeTaskCreate, FirmwareRolloutCreate
 from app.services import access_control as access
 
 
 router = APIRouter()
+
+@router.post("/rollouts", status_code=status.HTTP_201_CREATED)
+def create_rollout(body: FirmwareRolloutCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    firmware = firmware_crud.get(db, body.firmware_id)
+    if not firmware:
+        raise HTTPException(status_code=404, detail="固件不存在")
+    access.ensure_product(db, current_user, firmware.product_id, "operator")
+    rollout = FirmwareRollout(name=body.name, firmware_id=body.firmware_id, batch_size=max(1, body.batch_size), pause_on_failure=body.pause_on_failure, created_by=current_user.id, status="pending")
+    db.add(rollout); db.commit(); db.refresh(rollout)
+    for device_id in body.device_ids:
+        device = device_crud.get(db, device_id)
+        if device and device.product_id == firmware.product_id:
+            access.ensure_device(db, current_user, device, "operator")
+            task = firmware_upgrade_task_crud.create(db, FirmwareUpgradeTaskCreate(device_id=device.id, firmware_id=firmware.id), current_user.id)
+            task.rollout_id = rollout.id; db.commit()
+            try:
+                job = initiate_firmware_upgrade.delay(task.id)
+                firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
+            except Exception:
+                pass
+    return rollout
+
+@router.post("/rollouts/{rollout_id}/pause")
+def pause_rollout(rollout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    rollout = db.query(FirmwareRollout).filter(FirmwareRollout.id == rollout_id).first()
+    if not rollout: raise HTTPException(status_code=404, detail="灰度批次不存在")
+    firmware = firmware_crud.get(db, rollout.firmware_id); access.ensure_product(db, current_user, firmware.product_id, "operator")
+    rollout.status = "paused"; db.commit(); return {"id": rollout.id, "status": rollout.status}
+
+@router.get("/rollouts/{rollout_id}/stats")
+def rollout_stats(rollout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    rollout = db.query(FirmwareRollout).filter(FirmwareRollout.id == rollout_id).first()
+    if not rollout: raise HTTPException(status_code=404, detail="灰度批次不存在")
+    firmware = firmware_crud.get(db, rollout.firmware_id); access.ensure_product(db, current_user, firmware.product_id, "viewer")
+    tasks = db.query(FirmwareUpgradeTask).filter(FirmwareUpgradeTask.rollout_id == rollout.id).all()
+    counts = {}
+    for task in tasks: counts[task.status] = counts.get(task.status, 0) + 1
+    return {"rollout_id": rollout.id, "status": rollout.status, "counts": counts}
 
 
 # ==================== 升级任务管理 (放在参数路由之前) ====================

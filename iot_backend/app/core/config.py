@@ -32,11 +32,15 @@ class Settings(BaseSettings):
     MQTT_BROKER_PORT: int = 1883
     MQTT_USERNAME: Optional[str] = None
     MQTT_PASSWORD: Optional[str] = None
+    MQTT_CONNECT_TIMEOUT_SECONDS: int = 10
+    MQTT_PUBLISH_RETRIES: int = 3
+    MQTT_RETRY_BACKOFF_SECONDS: float = 0.5
 
     # JWT配置
     SECRET_KEY: str = "your-secret-key-here"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    MAX_EXPORT_DEVICES: int = 10000
 
     # Celery配置
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"

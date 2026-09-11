@@ -40,8 +40,8 @@ router = APIRouter()
 @router.get("/", response_model=List[Device])
 def read_devices(
     db: Session = Depends(get_db),
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     product_id: Optional[str] = Query(None),
     gateway_id: Optional[str] = Query(None),
     current_user: User = Depends(get_current_active_user),
@@ -69,8 +69,10 @@ def create_device(
     if not product:
         raise HTTPException(status_code=400, detail="产品不存在，请先创建产品")
     access.ensure_product(db, current_user, device_in.product_id, "operator")
-    if not current_user.is_superuser and not device_in.owner_id:
+    # 普通用户不能通过请求体伪造设备所有者；所有权始终归属当前用户。
+    if not current_user.is_superuser:
         device_in.owner_id = current_user.id
+        device_in.tenant_id = current_user.tenant_id
 
     device = device_crud.create(db, device_in)
     return device
@@ -94,8 +96,9 @@ def export_devices(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """导出设备 JSON"""
+    from app.core.config import settings
     devices = access.list_visible_devices(
-        db, current_user, skip=0, limit=10000, product_id=product_id,
+        db, current_user, skip=0, limit=settings.MAX_EXPORT_DEVICES, product_id=product_id,
     )
     payload = [
         {
@@ -138,8 +141,9 @@ def import_devices(
             errors.append({"device_id": item.device_id, "detail": exc.detail})
             continue
         obj = DeviceCreate(**item.model_dump())
-        if not current_user.is_superuser and not obj.owner_id:
+        if not current_user.is_superuser:
             obj.owner_id = current_user.id
+            obj.tenant_id = current_user.tenant_id
         device_crud.create(db, obj)
         created.append(item.device_id)
     return {
@@ -229,8 +233,8 @@ def read_device_data(
     *,
     db: Session = Depends(get_db),
     device_id: str,
-    skip: int = 0,
-    limit: int = 100,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=1000),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     """获取设备数据列表（遥测来自 Influx）"""
@@ -319,24 +323,8 @@ def send_device_command(
     if not command:
         raise HTTPException(status_code=500, detail="创建命令失败")
 
-    # 通过MQTT发送命令
-    try:
-        topic = f"device/{device_id}/command"
-        payload = {
-            "command_id": command.id,
-            "command_type": command.command_type,
-            "command_data": command.command_data
-        }
-        mqtt_client.publish(topic=topic, payload=json.dumps(payload))
-
-        # 更新命令状态为已发送
-        command = device_command_crud.update_status(db, command.id, "sent") or command
-    except Exception as e:
-        # 如果发送失败，更新状态
-        command = device_command_crud.update_status(
-            db, command.id, "failed", {"error": str(e)}
-        ) or command
-        raise HTTPException(status_code=500, detail=f"发送命令失败: {str(e)}")
+    from celery_worker import celery_app
+    celery_app.send_task("device_tasks.send_command", args=[command.id])
 
     return command
 

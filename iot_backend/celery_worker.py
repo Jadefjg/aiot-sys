@@ -33,6 +33,32 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1000,
 )
 
+@celery_app.task(bind=True, name="device_tasks.send_command", max_retries=3)
+def send_device_command_task(self, command_id: int):
+    """异步发布设备命令，并维护可靠状态。"""
+    from app.db.models.device import DeviceCommand
+    db = SessionLocal()
+    try:
+        command = db.query(DeviceCommand).filter(DeviceCommand.id == command_id).first()
+        if not command or command.status in ("sent", "acknowledged"):
+            return {"status": command.status if command else "missing"}
+        device = device_crud.get(db, command.device_id)
+        if not device:
+            device_command_crud.update_status(db, command_id, "failed", {"error": "device missing"})
+            return {"status": "failed"}
+        payload = {"command_id": command.id, "command_type": command.command_type, "command_data": command.command_data}
+        if not mqtt_service.publish(f"device/{device.device_id}/command", payload):
+            command.retry_count += 1
+            db.commit()
+            if command.retry_count <= command.max_retries:
+                raise self.retry(countdown=min(30, 2 ** command.retry_count))
+            device_command_crud.update_status(db, command_id, "failed", {"error": "publish retries exhausted"})
+            return {"status": "failed"}
+        device_command_crud.update_status(db, command_id, "sent")
+        return {"status": "sent"}
+    finally:
+        db.close()
+
 logger = get_task_logger(__name__)
 
 def _fail_upgrade(db, task_id: int, message: str) -> dict:

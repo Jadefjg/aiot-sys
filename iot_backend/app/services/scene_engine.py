@@ -70,12 +70,12 @@ def _match_rule(rule: dict, device_id: str, values: Dict[str, Any], product_id: 
     return _compare(values.get(field), rule.get("operator") or ">", rule.get("value"))
 
 
-def _publish(device, action: str, payload: dict) -> None:
+def _publish(device, action: str, payload: dict) -> bool:
     from app.services.mqtt_service import mqtt_client
     from app.services.device_runtime_service import device_runtime
 
     body = {"msg_id": str(uuid.uuid4()), "device_id": device.device_id, **payload}
-    mqtt_client.publish(device_runtime._target_topic(device, action), json.dumps(body))
+    return mqtt_client.publish(device_runtime._target_topic(device, action), json.dumps(body))
 
 
 class SceneEngine:
@@ -120,7 +120,25 @@ class SceneEngine:
             if conditions and not all(_match_rule(c, device_id, values, product_id) for c in conditions):
                 continue
             self._scene_until[cooldown_key] = now + 8
-            self._execute_actions(db, scene.actions or [], device_id)
+            self._execute_scene(db, scene, device_id, values)
+
+    def _execute_scene(self, db, scene, source_device_id, trigger_data):
+        from app.db.models.smart import SceneExecution
+        execution = SceneExecution(scene_id=scene.id, source_device_id=source_device_id,
+            trigger_data=trigger_data, actions=scene.actions or [], status="running")
+        db.add(execution); db.commit(); db.refresh(execution)
+        errors = []
+        attempts = max(1, int(scene.max_retries or 0) + 1)
+        for attempt in range(attempts):
+            execution.attempt_count = attempt + 1
+            errors = self._execute_actions(db, scene.actions or [], source_device_id)
+            if not errors:
+                break
+            time.sleep(min(2 ** attempt, 5))
+        execution.status = "success" if not errors else "failed"
+        execution.error_message = "; ".join(errors) if errors else None
+        execution.finished_at = datetime.utcnow()
+        db.add(execution); db.commit()
 
     def _run_bindings(self, db: Session, device_id: str, changed: dict) -> None:
         now = time.time()
@@ -143,26 +161,32 @@ class SceneEngine:
                 self._echo_until[peer] = now + 1.5
                 self._write_device(db, peer, delta)
 
-    def _execute_actions(self, db: Session, actions: List[dict], source_device_id: str = "") -> None:
+    def _execute_actions(self, db: Session, actions: List[dict], source_device_id: str = "") -> List[str]:
+        errors = []
         for action in actions:
             kind = action.get("type") or "write"
             target = action.get("device_id") or source_device_id
             if not target:
                 continue
             if kind == "write":
-                self._write_device(db, target, action.get("values") or action.get("data") or {})
+                if not self._write_device(db, target, action.get("values") or action.get("data") or {}):
+                    errors.append(f"write:{target}")
             elif kind == "action":
-                self._invoke(db, target, action.get("action") or "default", action.get("params") or {})
+                if not self._invoke(db, target, action.get("action") or "default", action.get("params") or {}):
+                    errors.append(f"action:{target}")
+        return errors
 
-    def _write_device(self, db: Session, device_id: str, values: dict) -> None:
+    def _write_device(self, db: Session, device_id: str, values: dict) -> bool:
         device = device_crud.get_by_device_id(db, device_id)
         if device and values:
-            _publish(device, "write", {"values": values})
+            return _publish(device, "write", {"values": values})
+        return False
 
-    def _invoke(self, db: Session, device_id: str, action: str, params: dict) -> None:
+    def _invoke(self, db: Session, device_id: str, action: str, params: dict) -> bool:
         device = device_crud.get_by_device_id(db, device_id)
         if device:
-            _publish(device, "action", {"action": action, "params": params})
+            return _publish(device, "action", {"action": action, "params": params})
+        return False
 
 
 scene_engine = SceneEngine()

@@ -36,6 +36,8 @@ def create_product(
 ) -> Any:
     if product_crud.get_by_product_id(db, product_in.product_id):
         raise HTTPException(status_code=400, detail="产品ID已存在")
+    if not current_user.is_superuser:
+        product_in.tenant_id = current_user.tenant_id
     product = product_crud.create(db, product_in)
     if not current_user.is_superuser:
         acl_crud.upsert_product(db, current_user.id, product.product_id, "admin")

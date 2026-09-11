@@ -21,8 +21,23 @@ class Scene(Base):
     conditions = Column(JSON, nullable=True)
     actions = Column(JSON, nullable=True)
     delay_seconds = Column(Integer, default=0)
+    max_retries = Column(Integer, default=3)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class SceneExecution(Base):
+    __tablename__ = "scene_executions"
+    id = Column(Integer, primary_key=True, index=True)
+    scene_id = Column(Integer, nullable=False, index=True)
+    source_device_id = Column(String(100), nullable=True, index=True)
+    trigger_data = Column(JSON, nullable=True)
+    actions = Column(JSON, nullable=True)
+    status = Column(String(20), default="running", index=True)
+    attempt_count = Column(Integer, default=0)
+    error_message = Column(Text, nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, index=True)
+    finished_at = Column(DateTime, nullable=True)
 
 
 class Job(Base):

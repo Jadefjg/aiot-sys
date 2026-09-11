@@ -39,6 +39,8 @@ class CRUDDevice:
     def update(self, db: Session, db_obj: Device, obj_in: DeviceUpdate) -> Device:
         update_data = obj_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
+            if field == "metadata":
+                field = "device_metadata"
             setattr(db_obj, field, value)
         db.add(db_obj)
         db.commit()
@@ -133,6 +135,10 @@ class CRUDDeviceData:
 
 class CRUDDeviceCommand:
     def create(self, db: Session, obj_in: DeviceCommandCreate, created_by: int) -> Optional[DeviceCommand]:
+        if obj_in.idempotency_key:
+            existing = db.query(DeviceCommand).filter(DeviceCommand.idempotency_key == obj_in.idempotency_key).first()
+            if existing:
+                return existing
         device = device_crud.get_by_device_id(db, obj_in.device_id)
         if not device:
             return None
@@ -140,6 +146,10 @@ class CRUDDeviceCommand:
             device_id=device.id,
             command_type=obj_in.command_type,
             command_data=obj_in.command_data,
+            idempotency_key=obj_in.idempotency_key,
+            timeout_seconds=obj_in.timeout_seconds,
+            max_retries=obj_in.max_retries,
+            expires_at=datetime.utcnow() + timedelta(seconds=obj_in.timeout_seconds),
             created_by=created_by
         )
         db.add(db_obj)

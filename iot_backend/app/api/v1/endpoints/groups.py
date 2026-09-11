@@ -135,6 +135,18 @@ def create_scene(
     return obj
 
 
+@scenes_router.get("/{scene_id}/executions")
+def list_scene_executions(scene_id: int, skip: int = Query(0, ge=0), limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)) -> Any:
+    scene = scene_crud.get(db, scene_id)
+    if not scene:
+        raise HTTPException(status_code=404, detail="场景不存在")
+    _ensure_scene_manage(db, current_user, scene)
+    from app.db.models.smart import SceneExecution
+    return db.query(SceneExecution).filter(SceneExecution.scene_id == scene_id).order_by(
+        SceneExecution.started_at.desc()).offset(skip).limit(limit).all()
+
+
 @scenes_router.put("/{scene_id}", response_model=Scene)
 def update_scene(
     scene_id: int,
