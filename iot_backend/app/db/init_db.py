@@ -21,6 +21,7 @@ DEVICE_EXTRA_COLUMNS = {
     "tenant_id": "INT NULL",
 }
 PRODUCT_EXTRA_COLUMNS = {"tenant_id": "INT NULL"}
+USER_EXTRA_COLUMNS = {"tenant_id": "INT NULL"}
 
 DEVICE_COMMAND_EXTRA_COLUMNS = {
     "idempotency_key": "VARCHAR(100) NULL",
@@ -36,6 +37,7 @@ def ensure_schema():
     import_models()
     Base.metadata.create_all(bind=engine)
     _ensure_device_columns()
+    _ensure_columns("users", USER_EXTRA_COLUMNS)
     _ensure_columns("device_commands", DEVICE_COMMAND_EXTRA_COLUMNS)
     _ensure_columns("products", PRODUCT_EXTRA_COLUMNS)
     _ensure_columns("firmware_upgrade_tasks", FIRMWARE_TASK_EXTRA_COLUMNS)
