@@ -54,7 +54,9 @@ class DeviceCommandService:
         try:
             # 获取设备信息
             from app.crud.device import device_crud
-            device = device_crud.get(db, device_id)
+            # The public API uses the device business identifier while
+            # ``get`` expects the database integer primary key.
+            device = device_crud.get_by_device_id(db, str(device_id))
 
             if not device:
                 logger.error(f"Device not found: {device_id}")

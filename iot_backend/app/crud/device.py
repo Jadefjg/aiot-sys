@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc
+from sqlalchemy import and_, desc, or_
 from datetime import datetime, timedelta
 from app.db.models.device import Device, DeviceData, DeviceCommand
 from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceDataCreate,DeviceCommandCreate
@@ -72,7 +72,10 @@ class CRUDDevice:
         return db.query(Device).filter(
             and_(
             Device.status == "offline",
-            Device.last_online_at < threshold
+            or_(
+                Device.last_online_at.is_(None),
+                Device.last_online_at < threshold,
+            )
             )
           ).all()
 
