@@ -23,6 +23,8 @@ class Alarm(Base):
     acknowledged = Column(Boolean, default=False)
     acknowledged_at = Column(DateTime, nullable=True)
     acknowledged_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    resolved = Column(Boolean, default=False, nullable=False, index=True)
+    resolved_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     device = relationship("Device", back_populates="alarms")

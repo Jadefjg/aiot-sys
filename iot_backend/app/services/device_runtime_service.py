@@ -60,6 +60,15 @@ class DeviceRuntimeService:
     def set_online(self, db: Session, device_id: str, online: bool = True) -> Optional[Device]:
         status = "online" if online else "offline"
         device = device_crud.update_status(db, device_id, status)
+        if device and online:
+            # 设备恢复在线后补偿发送离线期间积压的命令
+            try:
+                from app.crud.device import device_command_crud
+                from celery_worker import send_device_command_task
+                for cmd in device_command_crud.get_pending_commands(db, device_id):
+                    send_device_command_task.delay(cmd.id)
+            except Exception as exc:
+                logger.warning("命令离线补偿失败 %s: %s", device_id, exc)
         if device and not online and not device.gateway_id:
             # 网关离线时子设备一并离线
             children = (
@@ -144,7 +153,29 @@ class DeviceRuntimeService:
         )
 
         validators = (product.model or {}).get("validators", []) if product else []
-        for alarm_info in evaluate_validators(validators, merged):
+        triggered = evaluate_validators(validators, merged)
+        triggered_names = {item.get("validator_name") for item in triggered}
+        from datetime import datetime
+        from app.db.models.alarm import Alarm
+        # A validator that no longer matches resolves its latest active alarm.
+        active = db.query(Alarm).filter(Alarm.device_id == device.id, Alarm.resolved.is_(False)).all()
+        for old in active:
+            if old.validator_name and old.validator_name not in triggered_names:
+                old.resolved = True
+                old.resolved_at = datetime.utcnow()
+                db.add(old)
+                from app.services.scene_engine import scene_engine
+                scene_engine.on_alarm_event(db, device_id, {"type": "alarm_recovery", "resolved": True,
+                    "alarm_id": old.id, "validator_name": old.validator_name, "values": merged})
+        db.commit()
+        active_validator_names = {
+            old.validator_name for old in active
+            if old.validator_name and not old.resolved
+        }
+        for alarm_info in triggered:
+            # 抑制同一设备/规则在未恢复期间的重复告警
+            if alarm_info.get("validator_name") in active_validator_names:
+                continue
             alarm = alarm_crud.create(
                 db,
                 AlarmCreate(
@@ -160,6 +191,9 @@ class DeviceRuntimeService:
                     "message": alarm.message,
                     "level": alarm.level,
                 })
+            from app.services.scene_engine import scene_engine
+            scene_engine.on_alarm_event(db, device_id, {"type": "alarm", "resolved": False,
+                "alarm_id": alarm.id, "validator_name": alarm.validator_name, "values": merged})
         return device
 
     def set_location(

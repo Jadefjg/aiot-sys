@@ -28,19 +28,35 @@ def create_rollout(body: FirmwareRolloutCreate, db: Session = Depends(get_db), c
     if not firmware:
         raise HTTPException(status_code=404, detail="固件不存在")
     access.ensure_product(db, current_user, firmware.product_id, "operator")
+
+    # Validate the complete target set before creating the rollout.  The old
+    # implementation silently skipped missing, mismatched, or unauthorized
+    # devices after committing the rollout, leaving a misleading partial batch.
+    target_devices = []
+    seen = set()
+    for device_id in body.device_ids:
+        if device_id in seen:
+            continue
+        seen.add(device_id)
+        device = device_crud.get(db, device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail=f"设备不存在: {device_id}")
+        if device.product_id != firmware.product_id:
+            raise HTTPException(status_code=400, detail=f"设备 {device_id} 与固件产品不匹配")
+        access.ensure_device(db, current_user, device, "operator")
+        target_devices.append(device)
+
     rollout = FirmwareRollout(name=body.name, firmware_id=body.firmware_id, batch_size=max(1, body.batch_size), pause_on_failure=body.pause_on_failure, created_by=current_user.id, status="pending")
     db.add(rollout); db.commit(); db.refresh(rollout)
-    for device_id in body.device_ids:
-        device = device_crud.get(db, device_id)
-        if device and device.product_id == firmware.product_id:
-            access.ensure_device(db, current_user, device, "operator")
-            task = firmware_upgrade_task_crud.create(db, FirmwareUpgradeTaskCreate(device_id=device.id, firmware_id=firmware.id), current_user.id)
-            task.rollout_id = rollout.id; db.commit()
-            try:
-                job = initiate_firmware_upgrade.delay(task.id)
-                firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
-            except Exception:
-                pass
+    for device in target_devices:
+        task = firmware_upgrade_task_crud.create(db, FirmwareUpgradeTaskCreate(device_id=device.id, firmware_id=firmware.id), current_user.id)
+        task.rollout_id = rollout.id; db.commit()
+        try:
+            job = initiate_firmware_upgrade.delay(task.id)
+            firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
+        except Exception:
+            # Task creation remains visible and can be retried by an operator.
+            pass
     return rollout
 
 @router.post("/rollouts/{rollout_id}/pause")
@@ -58,7 +74,39 @@ def rollout_stats(rollout_id: int, db: Session = Depends(get_db), current_user: 
     tasks = db.query(FirmwareUpgradeTask).filter(FirmwareUpgradeTask.rollout_id == rollout.id).all()
     counts = {}
     for task in tasks: counts[task.status] = counts.get(task.status, 0) + 1
-    return {"rollout_id": rollout.id, "status": rollout.status, "counts": counts}
+    total = len(tasks)
+    completed = sum(counts.get(s, 0) for s in ("success", "failed", "cancelled"))
+    return {"rollout_id": rollout.id, "status": rollout.status, "counts": counts,
+            "total": total, "completed": completed,
+            "success_rate": (counts.get("success", 0) / total if total else 0)}
+
+
+@router.post("/tasks/{task_id}/retry", response_model=FirmwareUpgradeTask, status_code=status.HTTP_202_ACCEPTED)
+def retry_upgrade_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """Retry a failed OTA task while enforcing its configured retry budget."""
+    task = firmware_upgrade_task_crud.get(db, id=task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="升级任务不存在")
+    device = device_crud.get(db, id=task.device_id)
+    if not device:
+        raise HTTPException(status_code=404, detail="设备不存在")
+    access.ensure_device(db, current_user, device, "operator")
+    if task.status != "failed":
+        raise HTTPException(status_code=400, detail="仅失败任务可重试")
+    if task.retry_count >= task.max_retries:
+        raise HTTPException(status_code=409, detail="已达到最大重试次数")
+    task.retry_count += 1
+    task.status = "pending"
+    task.progress = 0
+    task.error_message = None
+    task.end_time = None
+    db.add(task); db.commit(); db.refresh(task)
+    try:
+        job = initiate_firmware_upgrade.delay(task.id)
+        firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
+    except Exception as exc:
+        firmware_upgrade_task_crud.update_status(db, task.id, "failed", error_message=str(exc))
+    return firmware_upgrade_task_crud.get(db, id=task_id)
 
 
 # ==================== 升级任务管理 (放在参数路由之前) ====================
@@ -126,6 +174,20 @@ async def create_upgrade_task(
         firmware_upgrade_task_crud.update_status(db, task.id, "failed", error_message=str(e))
 
     return task
+
+
+@router.post("/initiate", response_model=FirmwareUpgradeTask, status_code=status.HTTP_202_ACCEPTED)
+async def initiate_upgrade_legacy(
+    task_in: FirmwareUpgradeTaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """Compatibility endpoint for clients using /firmware_upgrade_tasks/initiate.
+
+    Keep one implementation of validation/dispatch so legacy and current
+    clients receive identical authorization and task state semantics.
+    """
+    return await create_upgrade_task(task_in=task_in, db=db, current_user=current_user)
 
 
 @router.post("/tasks/{task_id}/cancel", response_model=FirmwareUpgradeTask)

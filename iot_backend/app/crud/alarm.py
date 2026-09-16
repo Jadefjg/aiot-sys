@@ -27,6 +27,7 @@ class CRUDAlarm:
         limit: int = 100,
         device_id: Optional[int] = None,
         acknowledged: Optional[bool] = None,
+        resolved: Optional[bool] = None,
         owner_id: Optional[int] = None,
         device_ids: Optional[List[int]] = None,
     ) -> List[Alarm]:
@@ -41,6 +42,8 @@ class CRUDAlarm:
             query = query.filter(Alarm.device_id == device_id)
         if acknowledged is not None:
             query = query.filter(Alarm.acknowledged == acknowledged)
+        if resolved is not None:
+            query = query.filter(Alarm.resolved == resolved)
         return query.order_by(desc(Alarm.created_at)).offset(skip).limit(limit).all()
 
     def acknowledge(self, db: Session, alarm: Alarm, user_id: int) -> Alarm:

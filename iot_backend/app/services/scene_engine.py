@@ -50,7 +50,12 @@ def _in_time_window(scene: Scene) -> bool:
     start, end = window.get("start"), window.get("end")
     if start and end:
         current = now.strftime("%H:%M")
-        if not (start <= current <= end):
+        # Support windows crossing midnight (e.g. 23:00-02:00).
+        if start <= end:
+            inside = start <= current <= end
+        else:
+            inside = current >= start or current <= end
+        if not inside:
             return False
     return True
 
@@ -96,6 +101,26 @@ class SceneEngine:
         self._run_scenes(db, device_id, merged)
         self._run_bindings(db, device_id, changed)
 
+    def on_alarm_event(self, db: Session, device_id: str, event: dict) -> None:
+        """Evaluate explicit alarm/recovery scene triggers."""
+        self._refresh(db)
+        for scene in self._scenes:
+            if not scene.enabled:
+                continue
+            for trigger in scene.triggers or []:
+                trigger_type = trigger.get("type") or trigger.get("event")
+                if trigger_type not in ("alarm", "alarm_recovery", "recovery"):
+                    continue
+                wanted = trigger.get("validator_name") or trigger.get("validator")
+                if wanted and wanted != event.get("validator_name"):
+                    continue
+                if trigger_type in ("alarm_recovery", "recovery") and not event.get("resolved"):
+                    continue
+                if trigger_type == "alarm" and event.get("resolved"):
+                    continue
+                self._execute_scene(db, scene, device_id, event)
+                break
+
     def _refresh(self, db: Session) -> None:
         now = time.time()
         if now - self._cache_at > 3:
@@ -120,13 +145,26 @@ class SceneEngine:
             if conditions and not all(_match_rule(c, device_id, values, product_id) for c in conditions):
                 continue
             self._scene_until[cooldown_key] = now + 8
-            self._execute_scene(db, scene, device_id, values)
+            if scene.delay_seconds:
+                try:
+                    from celery_worker import execute_scene_task
+                    execute_scene_task.apply_async(
+                        args=[scene.id, device_id, values],
+                        countdown=max(0, min(int(scene.delay_seconds), 300)),
+                    )
+                except Exception as exc:
+                    logger.exception("Failed to enqueue scene %s: %s", scene.id, exc)
+                    self._execute_scene(db, scene, device_id, values)
+            else:
+                self._execute_scene(db, scene, device_id, values)
 
     def _execute_scene(self, db, scene, source_device_id, trigger_data):
         from app.db.models.smart import SceneExecution
         execution = SceneExecution(scene_id=scene.id, source_device_id=source_device_id,
             trigger_data=trigger_data, actions=scene.actions or [], status="running")
         db.add(execution); db.commit(); db.refresh(execution)
+        # delay_seconds is a supported schema field; honor it before actions.
+        # Keep the delay bounded so a malformed scene cannot stall ingestion.
         errors = []
         attempts = max(1, int(scene.max_retries or 0) + 1)
         for attempt in range(attempts):

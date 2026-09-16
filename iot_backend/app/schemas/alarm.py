@@ -25,6 +25,8 @@ class Alarm(AlarmBase):
     acknowledged: bool = False
     acknowledged_at: Optional[datetime] = None
     acknowledged_by: Optional[int] = None
+    resolved: bool = False
+    resolved_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

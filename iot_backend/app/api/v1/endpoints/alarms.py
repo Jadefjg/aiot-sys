@@ -21,6 +21,7 @@ def list_alarms(
     limit: int = 100,
     device_id: Optional[str] = Query(None, description="设备唯一标识"),
     acknowledged: Optional[bool] = None,
+    resolved: Optional[bool] = Query(None, description="是否已恢复"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
@@ -31,7 +32,7 @@ def list_alarms(
     pks = access.visible_device_pk_ids(db, current_user)
     return alarm_crud.get_multi(
         db, skip=skip, limit=limit, device_id=db_device_id,
-        acknowledged=acknowledged, device_ids=pks,
+        acknowledged=acknowledged, resolved=resolved, device_ids=pks,
     )
 
 

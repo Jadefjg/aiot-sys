@@ -160,6 +160,14 @@ class CRUDDeviceCommand:
     def update_status(self, db: Session, command_id: int, status: str, response_data: Optional[Dict[str, Any]] = None) -> Optional[DeviceCommand]:
         command = db.query(DeviceCommand).get(command_id)
         if command:
+            allowed = {
+                "pending": {"pending", "sent", "failed"},
+                "sent": {"sent", "acknowledged", "failed", "pending"},
+                "acknowledged": {"acknowledged"},
+                "failed": {"failed", "pending"},
+            }
+            if status not in allowed.get(command.status, set()):
+                return command
             command.status = status
             if status == "sent":
                 command.sent_at = datetime.utcnow()
@@ -182,6 +190,13 @@ class CRUDDeviceCommand:
             DeviceCommand.status == "pending"
             )
         ).all()
+
+    def get_expired_commands(self, db: Session, limit: int = 100) -> List[DeviceCommand]:
+        return db.query(DeviceCommand).filter(
+            DeviceCommand.status == "sent",
+            DeviceCommand.expires_at.isnot(None),
+            DeviceCommand.expires_at < datetime.utcnow(),
+        ).limit(limit).all()
 
 
 def prune_old_device_data(db: Session, days: int = 30, batch: int = 3000) -> int:

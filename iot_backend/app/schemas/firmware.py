@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 from typing import Optional
 from datetime import datetime
 
@@ -51,8 +51,8 @@ class FirmwareUpgradeTask(FirmwareUpgradeTaskBase):
 class FirmwareRolloutCreate(BaseModel):
     name: str
     firmware_id: int
-    device_ids: list[int] = []
-    batch_size: int = 10
+    device_ids: list[int] = Field(default_factory=list)
+    batch_size: int = Field(default=10, ge=1, le=1000)
     pause_on_failure: bool = True
 
 class FirmwareRollout(BaseModel):

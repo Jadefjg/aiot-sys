@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timedelta
 import requests
 from celery import Celery
 from celery.utils.log import get_task_logger
@@ -9,6 +10,7 @@ from app.crud.device import device_crud
 from app.crud.firmware import firmware_crud, firmware_upgrade_task_crud
 from app.schemas.device import DeviceUpdate
 from app.services.mqtt_service import mqtt_service
+from app.crud.device import device_command_crud
 
 
 # 创建Celery应用
@@ -31,7 +33,29 @@ celery_app.conf.update(
     task_soft_time_limit=25 * 60, # 25分钟软超时
     worker_prefetch_multiplier=1,
     worker_max_tasks_per_child=1000,
+    beat_schedule={"retry-expired-device-commands": {"task": "device_tasks.retry_expired", "schedule": 30.0}},
 )
+
+@celery_app.task(name="device_tasks.retry_expired")
+def retry_expired_commands():
+    db = SessionLocal()
+    try:
+        commands = device_command_crud.get_expired_commands(db)
+        for command in commands:
+            if command.retry_count >= command.max_retries:
+                device_command_crud.update_status(
+                    db, command.id, "failed",
+                    {"error": "command timeout; retries exhausted"},
+                )
+                continue
+            command.status = "pending"
+            command.retry_count += 1
+            command.expires_at = datetime.utcnow() + timedelta(seconds=command.timeout_seconds)
+            db.commit()
+            send_device_command_task.delay(command.id)
+        return {"queued": len(commands)}
+    finally:
+        db.close()
 
 @celery_app.task(bind=True, name="device_tasks.send_command", max_retries=3)
 def send_device_command_task(self, command_id: int):
@@ -56,6 +80,25 @@ def send_device_command_task(self, command_id: int):
             return {"status": "failed"}
         device_command_crud.update_status(db, command_id, "sent")
         return {"status": "sent"}
+    finally:
+        db.close()
+
+
+@celery_app.task(bind=True, name="scene_tasks.execute_scene", time_limit=360)
+def execute_scene_task(self, scene_id: int, source_device_id: str, trigger_data: dict):
+    """Execute scene actions asynchronously, keeping MQTT ingestion responsive."""
+    from app.crud.group import scene_crud
+    from app.services.scene_engine import scene_engine
+    db = SessionLocal()
+    try:
+        scene = scene_crud.get(db, scene_id)
+        if not scene or not scene.enabled:
+            return {"status": "skipped"}
+        scene_engine._execute_scene(db, scene, source_device_id, trigger_data or {})
+        return {"status": "completed", "scene_id": scene_id}
+    except Exception as exc:
+        logger.exception("Scene %s execution failed", scene_id)
+        return {"status": "dead_letter", "scene_id": scene_id, "error": str(exc)}
     finally:
         db.close()
 

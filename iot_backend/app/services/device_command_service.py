@@ -56,7 +56,11 @@ class DeviceCommandService:
             from app.crud.device import device_crud
             # The public API uses the device business identifier while
             # ``get`` expects the database integer primary key.
-            device = device_crud.get_by_device_id(db, str(device_id))
+            # Accept both the database primary key and the public business
+            # identifier used by API/MQTT callers.
+            device = device_crud.get(db, id=device_id)
+            if not device:
+                device = device_crud.get_by_device_id(db, str(device_id))
 
             if not device:
                 logger.error(f"Device not found: {device_id}")
@@ -93,12 +97,17 @@ class DeviceCommandService:
 
             # 创建命令记录
             device_command = DeviceCommandCreate(
-                device_id=device_id,
+                device_id=device.id,
                 command_type=command_type,
                 command_data=protocol_command
             )
 
-            db_command = device_command_crud.create(db, obj_in=device_command)
+            db_command = device_command_crud.create(
+                db, obj_in=device_command, created_by=created_by
+            )
+            if not db_command:
+                logger.error("Failed to persist command for device %s", device.device_id)
+                return None
 
             # 更新命令状态
             if success:
