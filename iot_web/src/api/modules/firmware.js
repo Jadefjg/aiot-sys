@@ -60,5 +60,8 @@ export const deleteUpgradeTask = (taskId) => {
   return api.delete(`/firmware/tasks/${taskId}`)
 }
 export const createFirmwareRollout = (data) => api.post('/firmware/rollouts', data)
+export const listFirmwareRollouts = (params = {}) => api.get('/firmware/rollouts', { params })
 export const pauseFirmwareRollout = (id) => api.post(`/firmware/rollouts/${id}/pause`)
+export const rollbackFirmwareRollout = (id) => api.post(`/firmware/rollouts/${id}/rollback`)
+export const nextFirmwareRollout = (id) => api.post(`/firmware/rollouts/${id}/next`)
 export const getFirmwareRolloutStats = (id) => api.get(`/firmware/rollouts/${id}/stats`)

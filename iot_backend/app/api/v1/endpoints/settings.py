@@ -60,5 +60,6 @@ def _module_title(module: str) -> str:
         "broker": "内置 Broker",
         "oem": "品牌 OEM",
         "database": "数据库",
+        "scale": "规模档位",
     }
     return titles.get(module, module)

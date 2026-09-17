@@ -11,6 +11,7 @@ from app.crud.group import group_crud
 from app.db.session import get_db
 from app.schemas.user import User
 from app.services import access_control as access
+from app.services.shadow_service import online_count
 from app.services.timeseries import timeseries
 
 router = APIRouter()
@@ -40,6 +41,9 @@ def get_overview(
         "influx": {
             "enabled": timeseries.enabled,
             "connected": timeseries.ping() if timeseries.enabled else False,
+        },
+        "scale": {
+            "online_cached": online_count(),
         },
         "recent_devices": [
             {

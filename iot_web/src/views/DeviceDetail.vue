@@ -151,16 +151,20 @@
           <div class="tab-toolbar">
             <el-button size="small" @click="loadShadow">刷新</el-button>
             <el-button size="small" type="primary" :loading="ctrlLoading" :disabled="!canOperate" @click="saveShadow">下发期望状态</el-button>
-            <span class="hint">reported 为上报快照，desired 经 MQTT setting 同步到设备</span>
+            <span class="hint">reported 为上报快照；desired 为期望；delta 为差异，设备上线后自动补偿</span>
           </div>
           <el-row :gutter="16">
-            <el-col :span="12">
+            <el-col :span="8">
               <div class="shadow-title">Reported v{{ shadow.version || 0 }}</div>
               <pre class="resp">{{ JSON.stringify(shadow.reported || {}, null, 2) }}</pre>
             </el-col>
-            <el-col :span="12">
+            <el-col :span="8">
               <div class="shadow-title">Desired</div>
               <el-input v-model="desiredJson" type="textarea" :rows="10" />
+            </el-col>
+            <el-col :span="8">
+              <div class="shadow-title">Delta（待同步）</div>
+              <pre class="resp">{{ JSON.stringify(shadow.delta || {}, null, 2) }}</pre>
             </el-col>
           </el-row>
         </el-tab-pane>
@@ -280,7 +284,7 @@ const writeForm = reactive({})
 const readPoints = ref([])
 const simJson = ref('{"temperature": 36.5}')
 const lastResponse = ref('')
-const shadow = ref({ reported: {}, desired: {}, version: 0 })
+const shadow = ref({ reported: {}, desired: {}, delta: {}, version: 0 })
 const desiredJson = ref('{}')
 const meterAddress = ref('')
 const trackMapRef = ref(null)
@@ -464,7 +468,7 @@ const loadTrack = async () => {
 }
 
 const loadShadow = async () => {
-  shadow.value = await getDeviceShadow(deviceId).catch(() => ({ reported: {}, desired: {}, version: 0 }))
+  shadow.value = await getDeviceShadow(deviceId).catch(() => ({ reported: {}, desired: {}, delta: {}, version: 0 }))
   desiredJson.value = JSON.stringify(shadow.value.desired || {}, null, 2)
 }
 

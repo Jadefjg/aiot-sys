@@ -158,6 +158,8 @@ services:
       INFLUX_TOKEN: ${INFLUX_TOKEN:-iot-influx-dev-token}
       INFLUX_ORG: ${INFLUX_ORG:-iot}
       INFLUX_BUCKET: ${INFLUX_BUCKET:-telemetry}
+      SCALE_STAGE: ${SCALE_STAGE:-prototype}
+      MQTT_CONNECT_RATE_LIMIT: ${MQTT_CONNECT_RATE_LIMIT:-0}
     volumes:
       - firmware_storage:/app/firmware_storage
       - media_storage:/app/media_storage

@@ -223,3 +223,39 @@ AIOT-SYS 当前形态可概括为：
 4. **以 FastAPI 四层单体为主实现中台能力**，并保留 Kong 微服务拆分路径。
 
 与 iot-master 参考项目相比：核心「模型 → MQTT → 管理台」主线已落地；协议插件总线、时序库、场景真正执行与插件生态仍是后续扩展方向。
+
+---
+
+## 11. 百万级 AIoT：量级迭代与本仓库落地
+
+对照 [设备量级迭代与技术选型](https://mp.weixin.qq.com/s/Hc878kPSOXpb-rm-QTd3dw) 的五阶段路径。目标量级：100 万+ 在线、10 万+ TPS、端到端 &lt; 500ms、可用性 99.99%、OTA 成功率 99.5%+。
+
+### 演进路径
+
+| 阶段 | 设备量级 | 推荐栈 | 本仓库 |
+|------|----------|--------|--------|
+| 原型验证 | 几千 | 单节点 MQTT + MySQL | `COMPOSE_PROFILES=local` 默认 |
+| 小规模生产 | 1–10 万 | EMQX 3 节点 + Redis 影子 + Influx/TDengine | `INFLUX_ENABLED`、影子走 Redis |
+| 中等规模 | 10–50 万 | MQTT 集群 + Kafka + 规则 + 时序集群 | 规则引擎、通道转发、灰度 OTA |
+| 大规模 | 50–200 万 | MQTT 分片 + 边缘聚合 + AI | 网关子设备、媒体 AI、微服务拆分 |
+| 超大规模 | 200 万+ | 多 Region + 全局 LB + 存储分层 | 不在单机 Compose 内完成 |
+
+管理台「规模架构」页（`/scale`）读取 `GET /api/v1/scale/profile`，对照当前设备数、Redis/Influx、Broker、流水线积压给出档位、缺口、动作清单与避坑。档位可通过 `SCALE_STAGE` 或系统设置「规模档位」覆盖。
+
+### 已落地的规模原语
+
+| 能力 | 实现 |
+|------|------|
+| 设备影子 desired / reported / **delta** | `shadow_service`：Redis `iot:shadow:` 热缓存 + MySQL 持久化；上线补偿；并发布 `$shadow/document/{id}/update/delta` |
+| 在线集合 | Redis `iot:online:devices` |
+| 消息流水线 | 接入 → 解析/DLQ → 影子 → 规则 → Influx → Redis Stream `iot:pipeline:telemetry`（Kafka 可替换） |
+| 告警防抖 | Redis `iot:alert:debounce:` 60s，避免规则风暴 |
+| 灰度 OTA | `FirmwareRollout` 分批 100→1k→1万；失败率 &gt;5% 暂停；`/next` 下一批；`/rollback` 取消 pending |
+| Last Will | 订阅 `device/+/lwt`、`device/+/will` |
+| 连接风暴 | `MQTT_CONNECT_RATE_LIMIT`；超限下发 `backoff.retry_after_ms` |
+| 死信 | 非法 JSON 写入 Redis `iot:dlq:messages` |
+| 遥测存储 | Influx 开启时 property **不再写 MySQL** |
+
+### 刻意未塞进 Compose 的选型
+
+百万级消息管道（Kafka）、TDengine 集群、多 Region MQTT 分片需要独立运维。当前单体保持 EMQX + Redis + 可选 Influx；微服务模式走 Kong + 四服务拆分。遥测禁止长期压 MySQL：超过原型档必须打开 Influx。

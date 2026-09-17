@@ -76,12 +76,16 @@ class RuleEngine:
         for action in rule.actions or [{"type": "alarm"}]:
             kind = action.get("type") or "alarm"
             if kind == "alarm":
+                from app.services.message_pipeline import alert_allowed
+                title = action.get("title") or rule.name
+                if not alert_allowed(device.device_id, title):
+                    continue
                 alarm = alarm_crud.create(
                     db,
                     AlarmCreate(
                         device_id=device.id,
                         product_id=device.product_id,
-                        title=action.get("title") or rule.name,
+                        title=title,
                         message=action.get("message") or f"{rule.field} {rule.operator} {rule.value}",
                         level=action.get("level") or "warning",
                         validator_name=f"rule:{rule.id}",

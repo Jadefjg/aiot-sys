@@ -60,7 +60,13 @@ class DeviceRuntimeService:
     def set_online(self, db: Session, device_id: str, online: bool = True) -> Optional[Device]:
         status = "online" if online else "offline"
         device = device_crud.update_status(db, device_id, status)
+        from app.services import shadow_service
+        shadow_service.set_online(device_id, online)
         if device and online:
+            try:
+                shadow_service.sync_on_reconnect(db, device)
+            except Exception as exc:
+                logger.warning("影子上线同步失败 %s: %s", device_id, exc)
             # 设备恢复在线后补偿发送离线期间积压的命令
             try:
                 from app.crud.device import device_command_crud
@@ -122,10 +128,16 @@ class DeviceRuntimeService:
             logger.warning("Scene engine: %s", exc)
 
         try:
-            from app.crud.channel import shadow_crud
-            shadow_crud.upsert_reported(db, device_id, values)
+            from app.services import shadow_service
+            shadow_service.upsert_reported(db, device_id, values)
         except Exception as exc:
             logger.warning("Device shadow: %s", exc)
+
+        try:
+            from app.services.message_pipeline import enqueue_telemetry
+            enqueue_telemetry(device_id, values, device.product_id or "")
+        except Exception as exc:
+            logger.warning("message pipeline: %s", exc)
 
         try:
             from app.services.rule_engine import rule_engine
@@ -175,6 +187,9 @@ class DeviceRuntimeService:
         for alarm_info in triggered:
             # 抑制同一设备/规则在未恢复期间的重复告警
             if alarm_info.get("validator_name") in active_validator_names:
+                continue
+            from app.services.message_pipeline import alert_allowed
+            if not alert_allowed(device_id, alarm_info.get("title") or "alarm"):
                 continue
             alarm = alarm_crud.create(
                 db,

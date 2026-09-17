@@ -62,7 +62,7 @@
             <el-button class="quick-btn" @click="$router.push('/products')">产品物模型</el-button>
             <el-button class="quick-btn" @click="$router.push('/devices')">设备管理</el-button>
             <el-button class="quick-btn" @click="$router.push('/scenes')">智能场景</el-button>
-            <el-button class="quick-btn" @click="$router.push('/screen')">数据大屏</el-button>
+            <el-button class="quick-btn" @click="$router.push('/scale')">规模架构</el-button>
           </div>
         </el-card>
       </el-col>

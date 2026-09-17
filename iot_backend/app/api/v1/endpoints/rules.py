@@ -5,17 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import get_current_active_user, has_permission
-from app.crud.channel import rule_crud, shadow_crud
+from app.crud.channel import rule_crud
 from app.db.session import get_db
 from app.schemas.channel import (
     DataRule, DataRuleCreate, DataRuleUpdate, DeviceShadow, ShadowDesired,
 )
 from app.schemas.user import User
 from app.services import access_control as access
-from app.services.device_runtime_service import device_runtime
-from app.services.mqtt_service import mqtt_client
-import json
-import uuid
+from app.services import shadow_service
 
 rules_router = APIRouter()
 shadow_router = APIRouter()
@@ -117,10 +114,11 @@ def get_shadow(
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
     access.load_device(db, current_user, device_id, "viewer")
+    from app.crud.channel import shadow_crud
     obj = shadow_crud.get(db, device_id)
     if not obj:
-        return DeviceShadow(device_id=device_id, reported={}, desired={}, version=0)
-    return obj
+        return DeviceShadow(device_id=device_id, reported={}, desired={}, delta={}, version=0)
+    return DeviceShadow(**shadow_service.to_document(obj), updated_at=obj.updated_at)
 
 
 @shadow_router.put("/{device_id}/shadow", response_model=DeviceShadow)
@@ -130,14 +128,7 @@ def set_shadow_desired(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """更新期望状态并经 MQTT setting 下发"""
+    """写入 desired，计算 delta；在线则经 MQTT setting 下发差异"""
     device = access.load_device(db, current_user, device_id, "operator")
-    obj = shadow_crud.set_desired(db, device_id, body.desired)
-    payload = {
-        "msg_id": str(uuid.uuid4()),
-        "device_id": device_id,
-        "name": "shadow",
-        "data": body.desired,
-    }
-    mqtt_client.publish(device_runtime._target_topic(device, "setting"), json.dumps(payload))
-    return obj
+    doc = shadow_service.set_desired(db, device_id, body.desired, device=device)
+    return DeviceShadow(**doc)

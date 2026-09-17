@@ -92,6 +92,7 @@ class DeviceShadow(BaseModel):
     device_id: str
     reported: Optional[Dict[str, Any]] = None
     desired: Optional[Dict[str, Any]] = None
+    delta: Optional[Dict[str, Any]] = None
     version: int = 1
     updated_at: Optional[datetime] = None
 

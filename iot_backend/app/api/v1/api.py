@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     auth, users, devices, firmware, permissions, roles,
     products, alarms, groups, device_control, protocols, settings,
-    links, smart, channels, rules, acl, overview, media,
+    links, smart, channels, rules, acl, overview, media, scale,
 )
 
 api_router = APIRouter()
@@ -35,3 +35,4 @@ api_router.include_router(protocols.router, prefix="/protocols", tags=["protocol
 api_router.include_router(settings.router, prefix="/settings", tags=["settings"])
 api_router.include_router(acl.router, prefix="/acl", tags=["acl"])
 api_router.include_router(overview.router, prefix="/overview", tags=["overview"])
+api_router.include_router(scale.router, prefix="/scale", tags=["scale"])

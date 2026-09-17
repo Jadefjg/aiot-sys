@@ -9,6 +9,7 @@
             <el-icon><Upload /></el-icon>
             上传固件
           </el-button>
+          <el-button @click="showRolloutDialog">灰度升级</el-button>
         </div>
       </template>
 
@@ -65,6 +66,38 @@
             <el-button type="danger" size="small" @click="handleDelete(row)">
               删除
             </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </el-card>
+
+    <el-card class="task-card" style="margin-top: 20px">
+      <template #header>
+        <div class="card-header">
+          <span>灰度批次</span>
+          <el-button @click="fetchRollouts">
+            <el-icon><Refresh /></el-icon>
+            刷新
+          </el-button>
+        </div>
+      </template>
+      <el-table :data="rollouts" v-loading="rolloutListLoading" stripe>
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="name" label="名称" />
+        <el-table-column prop="firmware_version" label="版本" width="120" />
+        <el-table-column prop="batch_size" label="批次大小" width="100" />
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag size="small">{{ row.status }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="300" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" type="primary" :disabled="row.status === 'paused' || row.status === 'completed'" @click="handleNextBatch(row)">
+              下一批
+            </el-button>
+            <el-button size="small" :disabled="row.status !== 'running'" @click="handlePauseRollout(row)">暂停</el-button>
+            <el-button size="small" type="danger" :disabled="row.status === 'rolled_back' || row.status === 'completed'" @click="handleRollback(row)">回滚</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -183,6 +216,58 @@
         <el-button @click="detailDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 灰度升级：100 → 1k → 1万，避免一次推全量 -->
+    <el-dialog v-model="rolloutDialogVisible" title="灰度升级" width="560px">
+      <el-alert type="info" :closable="false" style="margin-bottom: 12px">
+        按批次推送 MQTT 升级指令，观察成功率后再点「下一批」。失败率超过 5% 会自动暂停。
+      </el-alert>
+      <el-form label-width="100px">
+        <el-form-item label="批次名称">
+          <el-input v-model="rolloutForm.name" placeholder="如 1.2.0 灰度 100 台" />
+        </el-form-item>
+        <el-form-item label="固件">
+          <el-select v-model="rolloutForm.firmware_id" placeholder="选择固件" style="width: 100%" @change="onRolloutFirmwareChange">
+            <el-option
+              v-for="f in firmwares"
+              :key="f.id"
+              :label="`${f.version} / ${f.product_id}`"
+              :value="f.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="批次大小">
+          <el-select v-model="rolloutForm.batch_size" style="width: 100%">
+            <el-option :value="100" label="100（试点）" />
+            <el-option :value="1000" label="1,000（小规模）" />
+            <el-option :value="10000" label="10,000（中规模）" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="目标设备">
+          <el-select
+            v-model="rolloutForm.device_ids"
+            multiple
+            filterable
+            placeholder="选择同产品设备"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="d in rolloutDevices"
+              :key="d.id"
+              :label="d.device_name ? `${d.device_id} (${d.device_name})` : d.device_id"
+              :value="d.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="失败暂停">
+          <el-switch v-model="rolloutForm.pause_on_failure" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="rolloutDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="rolloutLoading" @click="submitRollout">创建并推送首批</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -196,8 +281,14 @@ import {
   deleteFirmware,
   activateFirmware,
   getUpgradeTasks,
-  cancelUpgradeTask
+  cancelUpgradeTask,
+  createFirmwareRollout,
+  listFirmwareRollouts,
+  nextFirmwareRollout,
+  pauseFirmwareRollout,
+  rollbackFirmwareRollout
 } from '@/api/modules/firmware'
+import { getDevices } from '@/api/modules/devices'
 
 // 状态
 const loading = ref(false)
@@ -210,7 +301,19 @@ const searchKeyword = ref('')
 // 对话框状态
 const uploadDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
+const rolloutDialogVisible = ref(false)
 const selectedFirmware = ref(null)
+const rollouts = ref([])
+const rolloutDevices = ref([])
+const rolloutLoading = ref(false)
+const rolloutListLoading = ref(false)
+const rolloutForm = reactive({
+  name: '',
+  firmware_id: null,
+  device_ids: [],
+  batch_size: 100,
+  pause_on_failure: true
+})
 
 // 上传表单
 const uploadFormRef = ref(null)
@@ -407,6 +510,94 @@ const showDetailDialog = (firmware) => {
   detailDialogVisible.value = true
 }
 
+const showRolloutDialog = () => {
+  rolloutForm.name = ''
+  rolloutForm.firmware_id = firmwares.value[0]?.id || null
+  rolloutForm.device_ids = []
+  rolloutForm.batch_size = 100
+  rolloutForm.pause_on_failure = true
+  rolloutDialogVisible.value = true
+  onRolloutFirmwareChange()
+}
+
+const onRolloutFirmwareChange = async () => {
+  const fw = firmwares.value.find((f) => f.id === rolloutForm.firmware_id)
+  if (!fw) {
+    rolloutDevices.value = []
+    return
+  }
+  const list = await getDevices({ product_id: fw.product_id, limit: 1000 }).catch(() => [])
+  rolloutDevices.value = Array.isArray(list) ? list : []
+}
+
+const submitRollout = async () => {
+  if (!rolloutForm.firmware_id || !rolloutForm.device_ids.length) {
+    ElMessage.warning('请选择固件和目标设备')
+    return
+  }
+  rolloutLoading.value = true
+  try {
+    const res = await createFirmwareRollout({
+      name: rolloutForm.name || `灰度 ${new Date().toLocaleString()}`,
+      firmware_id: rolloutForm.firmware_id,
+      device_ids: rolloutForm.device_ids,
+      batch_size: rolloutForm.batch_size,
+      pause_on_failure: rolloutForm.pause_on_failure
+    })
+    ElMessage.success(`已创建批次，首批推送 ${res.started || 0} / ${res.total || 0}`)
+    rolloutDialogVisible.value = false
+    await fetchRollouts()
+    await fetchUpgradeTasks()
+  } catch (error) {
+    console.error('创建灰度批次失败:', error)
+  } finally {
+    rolloutLoading.value = false
+  }
+}
+
+const fetchRollouts = async () => {
+  rolloutListLoading.value = true
+  try {
+    const list = await listFirmwareRollouts()
+    rollouts.value = Array.isArray(list) ? list : []
+  } catch (error) {
+    console.error('获取灰度批次失败:', error)
+  } finally {
+    rolloutListLoading.value = false
+  }
+}
+
+const handleNextBatch = async (row) => {
+  try {
+    const res = await nextFirmwareRollout(row.id)
+    ElMessage.success(`本批推送 ${res.started || 0} 台，剩余 pending ${res.pending ?? 0}`)
+    await fetchRollouts()
+    await fetchUpgradeTasks()
+  } catch (error) {
+    console.error('下一批失败:', error)
+  }
+}
+
+const handlePauseRollout = async (row) => {
+  await pauseFirmwareRollout(row.id)
+  ElMessage.success('批次已暂停')
+  await fetchRollouts()
+}
+
+const handleRollback = async (row) => {
+  await ElMessageBox.confirm('将取消未推送任务并停止后续批次，确认回滚？', 'OTA 回滚', { type: 'warning' })
+  const res = await rollbackFirmwareRollout(row.id)
+  ElMessage.success(`已回滚，取消 pending ${res.cancelled ?? 0} 台`)
+  await fetchRollouts()
+  await fetchUpgradeTasks()
+}
+
+onMounted(() => {
+  fetchFirmwares()
+  fetchUpgradeTasks()
+  fetchRollouts()
+})
+
 // 取消升级任务
 const handleCancelTask = async (task) => {
   try {
@@ -425,11 +616,6 @@ const handleCancelTask = async (task) => {
     }
   }
 }
-
-onMounted(() => {
-  fetchFirmwares()
-  fetchUpgradeTasks()
-})
 </script>
 
 <style scoped>

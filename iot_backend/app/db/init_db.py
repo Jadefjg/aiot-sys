@@ -31,6 +31,13 @@ DEVICE_COMMAND_EXTRA_COLUMNS = {
     "expires_at": "DATETIME NULL",
 }
 FIRMWARE_TASK_EXTRA_COLUMNS = {"rollout_id": "INT NULL"}
+ALARM_EXTRA_COLUMNS = {
+    "resolved": "BOOLEAN NOT NULL DEFAULT 0",
+    "resolved_at": "DATETIME NULL",
+}
+SCENE_EXTRA_COLUMNS = {
+    "max_retries": "INT DEFAULT 3",
+}
 
 
 def ensure_schema():
@@ -41,6 +48,9 @@ def ensure_schema():
     _ensure_columns("device_commands", DEVICE_COMMAND_EXTRA_COLUMNS)
     _ensure_columns("products", PRODUCT_EXTRA_COLUMNS)
     _ensure_columns("firmware_upgrade_tasks", FIRMWARE_TASK_EXTRA_COLUMNS)
+    _ensure_columns("alarms", ALARM_EXTRA_COLUMNS)
+    _ensure_columns("scenes", SCENE_EXTRA_COLUMNS)
+    _ensure_missing_model_columns()
     _ensure_script_columns()
     _ensure_indexes()
     _ensure_firmware_version_constraint()
@@ -100,6 +110,67 @@ def _ensure_device_columns():
             except Exception as exc:
                 logger.warning("Skip column %s: %s", name, exc)
 
+
+def _column_ddl(column) -> str:
+    from sqlalchemy import BigInteger, Boolean, DateTime, Float, Integer, JSON, String, Text
+
+    typ = column.type
+    if isinstance(typ, Boolean):
+        sql = "BOOLEAN"
+    elif isinstance(typ, BigInteger):
+        sql = "BIGINT"
+    elif isinstance(typ, Integer):
+        sql = "INT"
+    elif isinstance(typ, Float):
+        sql = "FLOAT"
+    elif isinstance(typ, String):
+        sql = f"VARCHAR({typ.length or 255})"
+    elif isinstance(typ, Text):
+        sql = "TEXT"
+    elif isinstance(typ, DateTime):
+        sql = "DATETIME"
+    elif isinstance(typ, JSON):
+        sql = "JSON"
+    else:
+        return ""
+    if column.nullable is False and not column.primary_key:
+        sql += " NOT NULL"
+    arg = getattr(column.default, "arg", None) if column.default is not None else None
+    if callable(arg):
+        arg = None
+    if arg is True:
+        sql += " DEFAULT 1"
+    elif arg is False:
+        sql += " DEFAULT 0"
+    elif isinstance(arg, int):
+        sql += f" DEFAULT {arg}"
+    elif isinstance(arg, str):
+        sql += " DEFAULT '" + arg.replace("'", "''") + "'"
+    return sql
+
+
+def _ensure_missing_model_columns() -> None:
+    """给已有表补上 ORM 新增列，避免 create_all 不改旧表导致 500。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    for table in Base.metadata.sorted_tables:
+        if table.name not in tables:
+            continue
+        existing = {c["name"] for c in inspector.get_columns(table.name)}
+        for column in table.columns:
+            if column.name in existing:
+                continue
+            ddl = _column_ddl(column)
+            if not ddl:
+                continue
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text(f"ALTER TABLE `{table.name}` ADD COLUMN `{column.name}` {ddl}"))
+                logger.info("Added column %s.%s", table.name, column.name)
+            except Exception as exc:
+                logger.warning("Skip column %s.%s: %s", table.name, column.name, exc)
+
+
 def _ensure_columns(table: str, columns: dict) -> None:
     inspector = inspect(engine)
     if table not in inspector.get_table_names():
@@ -136,6 +207,7 @@ INDEXES = [
     ("data_rules", "ix_data_rules_enabled", "enabled"),
     ("device_commands", "ux_device_commands_idempotency", "idempotency_key"),
     ("device_commands", "ix_device_commands_expires", "expires_at"),
+    ("alarms", "ix_alarms_resolved", "resolved"),
 ]
 
 DEFAULT_PERMISSIONS = [

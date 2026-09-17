@@ -33,6 +33,12 @@ const routes = [
         meta: { title: '数据大屏' }
       },
       {
+        path: 'scale',
+        name: 'Scale',
+        component: () => import('@/views/ScaleArchitecture.vue'),
+        meta: { title: '规模架构' }
+      },
+      {
         path: 'devices',
         name: 'Devices',
         component: () => import('@/views/DevicesManagement.vue'),

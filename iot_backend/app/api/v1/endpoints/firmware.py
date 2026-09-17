@@ -19,8 +19,34 @@ from app.tasks.firmware_tasks import initiate_firmware_upgrade
 from app.schemas.firmware import Firmware, FirmwareCreate, FirmwareUpgradeTask, FirmwareUpgradeTaskCreate, FirmwareRolloutCreate
 from app.services import access_control as access
 
-
 router = APIRouter()
+
+
+def _dispatch_pending_batch(db, rollout) -> int:
+    """只推送下一批 pending 任务，避免百万设备一次消息风暴"""
+    pending = (
+        db.query(FirmwareUpgradeTask)
+        .filter(
+            FirmwareUpgradeTask.rollout_id == rollout.id,
+            FirmwareUpgradeTask.status == "pending",
+        )
+        .order_by(FirmwareUpgradeTask.id)
+        .limit(max(1, rollout.batch_size))
+        .all()
+    )
+    started = 0
+    for task in pending:
+        try:
+            job = initiate_firmware_upgrade.delay(task.id)
+            firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
+            started += 1
+        except Exception:
+            pass
+    if started:
+        rollout.status = "running"
+        db.commit()
+    return started
+
 
 @router.post("/rollouts", status_code=status.HTTP_201_CREATED)
 def create_rollout(body: FirmwareRolloutCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
@@ -50,14 +76,46 @@ def create_rollout(body: FirmwareRolloutCreate, db: Session = Depends(get_db), c
     db.add(rollout); db.commit(); db.refresh(rollout)
     for device in target_devices:
         task = firmware_upgrade_task_crud.create(db, FirmwareUpgradeTaskCreate(device_id=device.id, firmware_id=firmware.id), current_user.id)
-        task.rollout_id = rollout.id; db.commit()
+        task.rollout_id = rollout.id
+        db.commit()
+    started = _dispatch_pending_batch(db, rollout)
+    return {"id": rollout.id, "status": rollout.status, "started": started, "total": len(target_devices)}
+
+
+@router.get("/rollouts")
+def list_rollouts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+    limit: int = Query(50, ge=1, le=200),
+):
+    """灰度批次列表（按产品可见性过滤）"""
+    rows = (
+        db.query(FirmwareRollout)
+        .order_by(FirmwareRollout.id.desc())
+        .limit(limit)
+        .all()
+    )
+    result = []
+    for row in rows:
+        firmware = firmware_crud.get(db, row.firmware_id)
+        if not firmware:
+            continue
         try:
-            job = initiate_firmware_upgrade.delay(task.id)
-            firmware_upgrade_task_crud.update_celery_task_id(db, task.id, job.id)
-        except Exception:
-            # Task creation remains visible and can be retried by an operator.
-            pass
-    return rollout
+            access.ensure_product(db, current_user, firmware.product_id, "viewer")
+        except HTTPException:
+            continue
+        result.append({
+            "id": row.id,
+            "name": row.name,
+            "firmware_id": row.firmware_id,
+            "firmware_version": firmware.version,
+            "status": row.status,
+            "batch_size": row.batch_size,
+            "pause_on_failure": row.pause_on_failure,
+            "created_at": row.created_at,
+        })
+    return result
+
 
 @router.post("/rollouts/{rollout_id}/pause")
 def pause_rollout(rollout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
@@ -65,6 +123,66 @@ def pause_rollout(rollout_id: int, db: Session = Depends(get_db), current_user: 
     if not rollout: raise HTTPException(status_code=404, detail="灰度批次不存在")
     firmware = firmware_crud.get(db, rollout.firmware_id); access.ensure_product(db, current_user, firmware.product_id, "operator")
     rollout.status = "paused"; db.commit(); return {"id": rollout.id, "status": rollout.status}
+
+
+@router.post("/rollouts/{rollout_id}/rollback")
+def rollback_rollout(
+    rollout_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """失败率过高时回滚：取消未推送任务，停止后续批次。"""
+    rollout = db.query(FirmwareRollout).filter(FirmwareRollout.id == rollout_id).first()
+    if not rollout:
+        raise HTTPException(status_code=404, detail="灰度批次不存在")
+    firmware = firmware_crud.get(db, rollout.firmware_id)
+    access.ensure_product(db, current_user, firmware.product_id, "operator")
+    pending = (
+        db.query(FirmwareUpgradeTask)
+        .filter(FirmwareUpgradeTask.rollout_id == rollout.id, FirmwareUpgradeTask.status == "pending")
+        .all()
+    )
+    for task in pending:
+        task.status = "cancelled"
+        db.add(task)
+    rollout.status = "rolled_back"
+    db.commit()
+    return {"id": rollout.id, "status": rollout.status, "cancelled": len(pending)}
+
+
+@router.post("/rollouts/{rollout_id}/next")
+def next_rollout_batch(rollout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """观察上一批评估通过后，推送下一批"""
+    rollout = db.query(FirmwareRollout).filter(FirmwareRollout.id == rollout_id).first()
+    if not rollout:
+        raise HTTPException(status_code=404, detail="灰度批次不存在")
+    firmware = firmware_crud.get(db, rollout.firmware_id)
+    access.ensure_product(db, current_user, firmware.product_id, "operator")
+    if rollout.status == "paused":
+        raise HTTPException(status_code=409, detail="批次已暂停，请先恢复")
+    tasks = db.query(FirmwareUpgradeTask).filter(FirmwareUpgradeTask.rollout_id == rollout.id).all()
+    failed = sum(1 for t in tasks if t.status == "failed")
+    total = len(tasks) or 1
+    if rollout.pause_on_failure and failed * 100 / total > 5:
+        rollout.status = "paused"
+        db.commit()
+        raise HTTPException(status_code=409, detail="失败率超过 5%，已自动暂停")
+    started = _dispatch_pending_batch(db, rollout)
+    pending_left = (
+        db.query(FirmwareUpgradeTask)
+        .filter(FirmwareUpgradeTask.rollout_id == rollout.id, FirmwareUpgradeTask.status == "pending")
+        .count()
+    )
+    if pending_left == 0:
+        still = (
+            db.query(FirmwareUpgradeTask)
+            .filter(FirmwareUpgradeTask.rollout_id == rollout.id, FirmwareUpgradeTask.status == "in_progress")
+            .count()
+        )
+        if still == 0:
+            rollout.status = "completed"
+            db.commit()
+    return {"id": rollout.id, "status": rollout.status, "started": started, "pending": pending_left}
 
 @router.get("/rollouts/{rollout_id}/stats")
 def rollout_stats(rollout_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):

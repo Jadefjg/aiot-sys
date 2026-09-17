@@ -39,6 +39,11 @@ MODULE_FORMS: Dict[str, List[Dict[str, Any]]] = {
         {"name": "user", "label": "用户名", "type": "text"},
         {"name": "database", "label": "库名", "type": "text"},
     ],
+    "scale": [
+        {"name": "stage", "label": "规模档位", "type": "select",
+         "options": ["prototype", "small", "medium", "large", "xlarge"]},
+        {"name": "connect_rate_limit", "label": "每秒新连接上限(0不限)", "type": "number"},
+    ],
 }
 
 _STORE_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "runtime_settings.json")
@@ -72,6 +77,11 @@ def _defaults(module: str) -> Dict[str, Any]:
             "user": settings.MYSQL_USER,
             "database": settings.MYSQL_DATABASE,
         }
+    if module == "scale":
+        return {
+            "stage": settings.SCALE_STAGE or "prototype",
+            "connect_rate_limit": settings.MQTT_CONNECT_RATE_LIMIT,
+        }
     return {}
 
 
@@ -92,6 +102,17 @@ def _save_store(data: Dict[str, Any]) -> None:
 
 def list_modules() -> List[str]:
     return list(MODULE_FORMS.keys())
+
+
+def connect_rate_limit() -> int:
+    """运行时连接限流：设置页优先，其次环境变量。"""
+    try:
+        stored = get_values("scale", redact=False) or {}
+        if stored.get("connect_rate_limit") is not None:
+            return int(stored.get("connect_rate_limit") or 0)
+    except Exception:
+        pass
+    return int(settings.MQTT_CONNECT_RATE_LIMIT or 0)
 
 
 def get_form(module: str) -> List[Dict[str, Any]]:

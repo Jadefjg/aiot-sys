@@ -16,6 +16,42 @@ from app.schemas.device import DeviceDataCreate, DeviceUpdate
 from app.services.device_runtime_service import device_runtime
 
 logger = logging.getLogger(__name__)
+DLQ_KEY = "iot:dlq:messages"
+
+
+def _push_dead_letter(raw: str) -> None:
+    try:
+        from app.core.redis import get_redis
+        client = get_redis()
+        if not client:
+            return
+        client.lpush(DLQ_KEY, (raw or "")[:4000])
+        client.ltrim(DLQ_KEY, 0, 999)
+    except Exception:
+        pass
+
+
+def allow_new_connection() -> bool:
+    """连接风暴防护：每秒新连接/注册上限"""
+    try:
+        from app.services.settings_store import connect_rate_limit
+        limit = connect_rate_limit()
+    except Exception:
+        limit = int(settings.MQTT_CONNECT_RATE_LIMIT or 0)
+    if limit <= 0:
+        return True
+    try:
+        from app.core.redis import get_redis
+        client = get_redis()
+        if not client:
+            return True
+        key = "iot:mqtt:connect:rate"
+        n = int(client.incr(key))
+        if n == 1:
+            client.expire(key, 1)
+        return n <= limit
+    except Exception:
+        return True
 
 DEVICE_TOPICS = [
     "device/+/data", "device/+/values", "device/+/property",
@@ -25,7 +61,7 @@ DEVICE_TOPICS = [
     "device/+/command/response", "device/+/sync/response",
     "device/+/read/response", "device/+/write/response",
     "device/+/action/response", "device/+/setting/response",
-    "device/+/firmware/status", "push/+/values",
+    "device/+/firmware/status", "device/+/lwt", "device/+/will", "push/+/values",
     "link/+/+/open", "link/+/+/close", "link/+/+/up", "link/+/+/down",
     "protocol/+/+/+/open", "protocol/+/+/+/close", "protocol/+/+/+/up",
     "protocol/+/+/+/poll", "protocol/+/+/+/sync",
@@ -125,6 +161,8 @@ class MQTTService:
             "event": self._handle_event,
             "log": self._handle_event,
             "heartbeat": lambda d, _: self._set_online(d, True),
+            "lwt": lambda d, _: self._set_online(d, False),
+            "will": lambda d, _: self._set_online(d, False),
             "firmware": self._handle_firmware,
         }
         handler = handlers.get(message_type)
@@ -136,6 +174,7 @@ class MQTTService:
             return json.loads(raw) if raw else {}
         except json.JSONDecodeError:
             logger.error("Invalid JSON: %s", raw)
+            _push_dead_letter(raw)
             return {}
 
     def _handle_values(self, device_id: str, raw: str):
@@ -165,6 +204,18 @@ class MQTTService:
             db.close()
 
     def _handle_register(self, device_id: str, raw: str):
+        if not allow_new_connection():
+            delay_ms = 1000 + int(time.time() * 1000) % 4000
+            logger.warning("connect rate limited, skip register %s retry_after=%s", device_id, delay_ms)
+            self.publish(
+                f"device/{device_id}/command",
+                {
+                    "cmd_type": "backoff",
+                    "retry_after_ms": delay_ms,
+                    "reason": "connect_rate_limit",
+                },
+            )
+            return
         data = self._parse(raw)
         db = SessionLocal()
         try:
@@ -300,7 +351,6 @@ class MQTTService:
                 settings.MQTT_BROKER_HOST,
                 settings.MQTT_BROKER_PORT,
                 keepalive=60,
-                clean_start=True,
             )
             self.client.loop_start()
             logger.info("MQTT service started")

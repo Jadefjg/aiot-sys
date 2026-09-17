@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     MQTT_CONNECT_TIMEOUT_SECONDS: int = 10
     MQTT_PUBLISH_RETRIES: int = 3
     MQTT_RETRY_BACKOFF_SECONDS: float = 0.5
+    # 每秒接纳新连接/注册上限，0 表示不限（原型档）
+    MQTT_CONNECT_RATE_LIMIT: int = 0
+    # prototype | small | medium | large | xlarge；空则按设备数与能力探测
+    SCALE_STAGE: str = "prototype"
 
     # JWT配置
     SECRET_KEY: str = "your-secret-key-here"

@@ -52,7 +52,7 @@ class FirmwareRolloutCreate(BaseModel):
     name: str
     firmware_id: int
     device_ids: list[int] = Field(default_factory=list)
-    batch_size: int = Field(default=10, ge=1, le=1000)
+    batch_size: int = Field(default=100, ge=1, le=10000)
     pause_on_failure: bool = True
 
 class FirmwareRollout(BaseModel):

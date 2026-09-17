@@ -21,6 +21,10 @@
             <el-icon><DataBoard /></el-icon>
             <span>数据大屏</span>
           </el-menu-item>
+          <el-menu-item index="/scale">
+            <el-icon><TrendCharts /></el-icon>
+            <span>规模架构</span>
+          </el-menu-item>
         </el-menu-item-group>
 
         <el-menu-item-group title="物联网">
