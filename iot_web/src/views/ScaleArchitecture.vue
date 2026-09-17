@@ -1,8 +1,7 @@
 <template>
   <div class="scale-page">
     <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-      对照百万级 AIoT 平台演进路径评估当前部署。参考
-      <a href="https://mp.weixin.qq.com/s/Hc878kPSOXpb-rm-QTd3dw" target="_blank" rel="noopener">设备量级迭代与技术选型</a>
+      对照百万级 AIoT 平台演进路径评估当前部署。
     </el-alert>
 
     <el-row :gutter="16">
