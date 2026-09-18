@@ -277,7 +277,15 @@ class DeviceRuntimeService:
             _pending[msg_id] = {"event": event, "response": None}
 
         topic = self._target_topic(device, action)
-        mqtt_publish(topic, json.dumps(body))
+        try:
+            published = mqtt_publish(topic, json.dumps(body))
+        except Exception as exc:
+            published = False
+            logger.warning("MQTT publish failed for %s: %s", topic, exc)
+        if published is False:
+            with _pending_lock:
+                _pending.pop(msg_id, None)
+            raise ConnectionError(f"设备命令发布失败: {action}")
 
         ok = event.wait(timeout)
         with _pending_lock:

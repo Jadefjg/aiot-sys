@@ -241,7 +241,9 @@ def read_device_data(
     device = access.load_device(db, current_user, device_id, "viewer")
     from app.services.timeseries import timeseries
     if timeseries.enabled:
-        rows = timeseries.query_rows(device.device_id, limit=limit)
+        # Apply pagination to the complete result set. Querying only ``limit``
+        # rows first makes every page after the first one empty.
+        rows = timeseries.query_rows(device.device_id, limit=skip + limit)
         from datetime import datetime
         out = []
         for i, row in enumerate(rows[skip:skip + limit]):
@@ -355,5 +357,7 @@ async def control_device(
     # 发布控制指令到MQTT主题
     topic = f"device/{device_id}/control"
     payload = json.dumps(command)
-    mqtt_client.publish(topic, payload)
+    published = mqtt_client.publish(topic, payload)
+    if published is False:
+        raise HTTPException(status_code=503, detail="MQTT不可用，控制指令未发送")
     return {"message": f"控制指令已发送到设备 {device_id}"}

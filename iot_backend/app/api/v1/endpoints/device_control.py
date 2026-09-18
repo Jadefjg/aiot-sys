@@ -57,6 +57,8 @@ def _mqtt_call(device, action: str, payload: dict) -> dict:
         return device_runtime.request(mqtt_client.publish, device, action, payload)
     except TimeoutError as exc:
         raise HTTPException(status_code=504, detail=str(exc))
+    except ConnectionError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.post("/{device_id}/register", response_model=Device)
@@ -184,13 +186,15 @@ def device_history(
     device = _get_owned_device(db, device_id, current_user, "viewer")
     wanted = [p.strip() for p in (points or "").split(",") if p.strip()]
     series = timeseries.query_series(device.device_id, start, end, wanted, limit)
-    if timeseries.enabled:
+    if timeseries.enabled and series is not None:
         return {
             "device_id": device_id,
             "series": series or {},
             "count": sum(len(v) for v in (series or {}).values()),
             "source": "influx",
         }
+    # If Influx is configured but temporarily unavailable, fall back to the
+    # MySQL history instead of returning a misleading empty Influx result.
     series = _mysql_series(db, device, wanted, start, end, limit)
     count = sum(len(v) for v in series.values())
     return {"device_id": device_id, "series": series, "count": count, "source": "mysql"}

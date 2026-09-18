@@ -209,8 +209,12 @@ class CRUDFirmwareUpgradeTask:
         """更新升级进度"""
         task = self.get(db, id)
         if task:
-            task.progress = progress
-            if progress >= 100:
+            # Late/out-of-order device reports must not regress progress or
+            # resurrect a terminal task.
+            if task.status in ("success", "failed", "cancelled"):
+                return task
+            task.progress = max(task.progress or 0, min(100, int(progress)))
+            if task.progress >= 100:
                 task.status = "success"
                 task.end_time = datetime.utcnow()
             db.add(task)

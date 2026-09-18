@@ -17,11 +17,12 @@ def import_models():
     from app.db.models.channel import Channel, ChannelLog, DataRule, DeviceShadow
     from app.db.models.acl import ProductACL, DeviceACL
     from app.db.models.media import DeviceMedia
+    from app.db.models.agent_workflow import AgentWorkflow
     return (
         Tenant, User, Role, Permission, UserRole, RolePermission,
         DeviceGroup, Device, DeviceData, DeviceCommand,
         Firmware, FirmwareUpgradeTask, FirmwareRollout, Product, Alarm,
         Scene, SceneExecution, Job, Binding, Script, Link,
         Channel, ChannelLog, DataRule, DeviceShadow,
-        ProductACL, DeviceACL, DeviceMedia,
+        ProductACL, DeviceACL, DeviceMedia, AgentWorkflow,
     )

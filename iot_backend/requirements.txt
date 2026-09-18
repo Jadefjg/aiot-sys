@@ -10,6 +10,9 @@ pymysql==1.1.0
 cryptography==41.0.7
 alembic==1.12.1
 redis==5.0.1
+# Optional, selected by CHECKPOINTER_BACKEND in production
+langgraph-checkpoint-redis>=0.1.0
+langgraph-checkpoint-postgres>=2.0.0
 celery==5.3.4
 paho-mqtt==1.6.1
 python-jose[cryptography]==3.3.0

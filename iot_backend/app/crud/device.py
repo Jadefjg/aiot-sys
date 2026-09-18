@@ -1,6 +1,6 @@
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, desc, or_
+from sqlalchemy import and_, desc, or_, update
 from datetime import datetime, timedelta
 from app.db.models.device import Device, DeviceData, DeviceCommand
 from app.schemas.device import DeviceCreate, DeviceUpdate, DeviceDataCreate,DeviceCommandCreate
@@ -197,6 +197,28 @@ class CRUDDeviceCommand:
             DeviceCommand.expires_at.isnot(None),
             DeviceCommand.expires_at < datetime.utcnow(),
         ).limit(limit).all()
+
+    def requeue_expired(self, db: Session, command_id: int, timeout_seconds: int = 30) -> bool:
+        """Atomically move an expired sent command back to pending.
+
+        ACK processing can race the periodic expiry worker.  The status
+        predicate prevents an ACKed command from being resurrected.
+        """
+        result = db.execute(
+            update(DeviceCommand)
+            .where(
+                DeviceCommand.id == command_id,
+                DeviceCommand.status == "sent",
+                DeviceCommand.expires_at < datetime.utcnow(),
+            )
+            .values(
+                status="pending",
+                retry_count=DeviceCommand.retry_count + 1,
+                expires_at=datetime.utcnow() + timedelta(seconds=max(1, int(timeout_seconds))),
+            )
+        )
+        db.commit()
+        return bool(result.rowcount)
 
 
 def prune_old_device_data(db: Session, days: int = 30, batch: int = 3000) -> int:

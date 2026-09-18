@@ -294,6 +294,14 @@ class MQTTService:
         db = SessionLocal()
         try:
             from app.crud.firmware import firmware_upgrade_task_crud
+            task = firmware_upgrade_task_crud.get(db, task_id)
+            if not task:
+                logger.warning("Ignoring firmware status for unknown task %s", task_id)
+                return
+            device = device_crud.get(db, task.device_id)
+            if not device or device.device_id != device_id:
+                logger.warning("Ignoring firmware status task=%s from device=%s", task_id, device_id)
+                return
 
             if status in ("success", "failed", "cancelled", "in_progress", "pending"):
                 firmware_upgrade_task_crud.update_status(

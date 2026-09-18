@@ -48,11 +48,8 @@ def retry_expired_commands():
                     {"error": "command timeout; retries exhausted"},
                 )
                 continue
-            command.status = "pending"
-            command.retry_count += 1
-            command.expires_at = datetime.utcnow() + timedelta(seconds=command.timeout_seconds)
-            db.commit()
-            send_device_command_task.delay(command.id)
+            if device_command_crud.requeue_expired(db, command.id, command.timeout_seconds):
+                send_device_command_task.delay(command.id)
         return {"queued": len(commands)}
     finally:
         db.close()

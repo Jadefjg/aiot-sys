@@ -22,10 +22,22 @@ class Settings(BaseSettings):
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
+    # Agent Workflow 状态持久化：redis（推荐多副本）或 postgres；memory 仅适用于开发
+    CHECKPOINTER_BACKEND: str = "redis"
+    CHECKPOINTER_REDIS_URL: Optional[str] = None
+    CHECKPOINTER_POSTGRES_URL: Optional[str] = None
 
     @property
     def REDIS_URL(self) -> str:
         return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+
+    @property
+    def AGENT_CHECKPOINTER_REDIS_URL(self) -> str:
+        return self.CHECKPOINTER_REDIS_URL or self.REDIS_URL
+
+    @property
+    def AGENT_CHECKPOINTER_POSTGRES_URL(self) -> str:
+        return self.CHECKPOINTER_POSTGRES_URL or self.DATABASE_URL
 
     # MQTT配置
     MQTT_BROKER_HOST: str = "localhost"
